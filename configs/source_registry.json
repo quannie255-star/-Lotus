@@ -1,0 +1,68 @@
+{
+  "version": "0.2.0",
+  "notes": [
+    "语料库的发布许可 ≠ 页面内容授权清洁：爬虫语料（OSCAR/CC）网页版权归原站点，这正是 DPI 审计关注点。",
+    "license_status=unknown 的源（news/pdf）在 release 阶段必须显式处置：默认排除出商用 release，或进 restricted 名单（owner 决策，写入 release 模块逻辑）。"
+  ],
+  "sources": {
+    "oscar": {
+      "display_name": "OSCAR",
+      "license": "CC0",
+      "license_note": "语料库以 CC0 发布；页面内容版权仍归原站点，provenance card 需注明",
+      "license_status": "permissive",
+      "commercial_use": "allowed",
+      "tos_url": "https://oscar-corpus.com/",
+      "default_genre": "unknown",
+      "content_format": "plain_text",
+      "source_id_policy": "warc_record_id（稳定主键）",
+      "metadata_schema": {
+        "warc_record_id": "string",
+        "crawl_metadata": "object",
+        "content_type":   "string"
+      }
+    },
+    "wiki": {
+      "display_name": "Wikipedia",
+      "license": "CC BY-SA 4.0",
+      "license_status": "permissive",
+      "commercial_use": "allowed",
+      "tos_url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+      "default_genre": "wiki",
+      "content_format": "markdown",
+      "source_id_policy": "revision_id（稳定主键）",
+      "metadata_schema": {
+        "page_title":  "string",
+        "revision_id": "string",
+        "namespace":   "string"
+      }
+    },
+    "news": {
+      "display_name": "News Corpus",
+      "license": "unknown",
+      "license_status": "unknown",
+      "commercial_use": "unknown",
+      "tos_url": null,
+      "default_genre": "news",
+      "content_format": "plain_text",
+      "source_id_policy": "article_id（若语料无稳定主键则改 sha256(raw_bytes)）",
+      "metadata_schema": {
+        "publisher": "string",
+        "section":   "string"
+      }
+    },
+    "pdf": {
+      "display_name": "PDF (MinerU)",
+      "license": "unknown",
+      "license_status": "unknown",
+      "commercial_use": "unknown",
+      "tos_url": null,
+      "default_genre": "gov",
+      "content_format": "markdown",
+      "source_id_policy": "sha256(raw_bytes)（无稳定主键）",
+      "metadata_schema": {
+        "mineru_version": "string",
+        "page_count":     "number"
+      }
+    }
+  }
+}

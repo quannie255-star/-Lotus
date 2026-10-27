@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schema/dedup_signature_schema.v0.3.0.json",
+  "title": "Dedup Signature Table Schema",
+  "version": "0.3.0",
+  "description": "MinHash/SimHash 签名的内部表；不进入脊柱，供 dedup 阶段审计和复算。落 Parquet 时 signature 建议存 binary（base64 字符串仅用于 JSON 交换）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["doc_id", "signature", "shingle_unit", "shingle_n", "num_perm", "algorithm", "run_id"],
+  "properties": {
+    "doc_id":        { "type": "string" },
+    "algorithm":     { "type": "string", "enum": ["minhash", "simhash"] },
+    "signature":     { "type": "string", "description": "序列化后的签名（MinHash 128 维 / SimHash 64 位），base64 或 hex" },
+    "shingle_unit":  { "type": "string", "enum": ["char", "word", "byte"] },
+    "shingle_n":     { "type": "integer", "minimum": 1 },
+    "num_perm":      { "type": "integer", "minimum": 1, "description": "MinHash 的置换次数" },
+    "run_id":        { "type": "string" }
+  }
+}

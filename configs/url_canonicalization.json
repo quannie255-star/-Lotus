@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1-draft",
+  "status": "owner_todo：逐条定稿。注意：本文件版本升级不得影响 doc_id——canonical_url 是数据，不是键材料。",
+  "rules": [
+    { "id": "scheme", "spec": "TODO：统一为 https？http→https（例外清单？）", "owner_todo": true },
+    { "id": "host", "spec": "TODO：host 小写化；去默认端口 :80/:443", "owner_todo": true },
+    { "id": "www", "spec": "TODO：去 www. 前缀？（部分站点 www 与裸域内容不同，需要例外）", "owner_todo": true },
+    { "id": "path", "spec": "TODO：去 trailing slash（根路径除外）；percent-encoding 归一（%41→A，大写十六进制）", "owner_todo": true },
+    { "id": "fragment", "spec": "去除 #fragment（一般不影响内容定位；正文锚点场景需确认）", "owner_todo": true },
+    { "id": "query_tracking_params", "spec": "TODO：删除追踪参数清单——utm_*、spm、from、share_token、chksm……中文站点追踪参数特别多，清单由 owner 定稿", "owner_todo": true },
+    { "id": "query_order", "spec": "TODO：剩余 query 参数按 key 排序（参数顺序不影响语义）", "owner_todo": true }
+  ]
+}

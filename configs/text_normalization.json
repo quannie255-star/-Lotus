@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1-draft",
+  "status": "owner_todo：逐条定稿本文件。定稿前 normalized_content_hash 不得参与幂等校验（规则漂移 = 哈希漂移 = 幂等失效）。",
+  "purpose": "仅为 normalized_content_hash 服务；脊柱 content 本体不做简繁折叠等破坏性改写。",
+  "rules": [
+    { "id": "unicode_normalization", "spec": "TODO：NFC 还是 NFKC？（NFKC 会折叠全角字符与兼容字符，去重更激进，但对计量单位/商标字符有副作用）", "owner_todo": true },
+    { "id": "case_folding", "spec": "TODO：拉丁字母小写化？（汉字不涉及；确认是否折叠 ß/İ 等特殊用例）", "owner_todo": true },
+    { "id": "width_folding", "spec": "TODO：全角→半角（ＡＢＣ→ABC，２００６→2006）？若上面选 NFKC 则此项被覆盖", "owner_todo": true },
+    { "id": "whitespace", "spec": "TODO：连续空白折叠为单个空格、去首尾空白——是否保留换行结构？（Markdown 表格/代码块对空白敏感）", "owner_todo": true },
+    { "id": "trad_simp_folding", "spec": "TODO：繁→简折叠（OpenCC s2t 或 t2s？仅用于哈希，不改写 content）——同一简繁两版算不算重复？", "owner_todo": true },
+    { "id": "punctuation", "spec": "TODO：中文标点→英文标点归一（，→,）？对近重复判定影响大", "owner_todo": true }
+  ],
+  "hash": {
+    "algorithm": "sha256",
+    "input": "utf8(按上述规则顺序处理后的文本)"
+  }
+}

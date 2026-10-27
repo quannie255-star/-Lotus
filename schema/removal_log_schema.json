@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schema/removal_log_schema.v0.3.1.json",
+  "title": "Change Log Schema（原 removal log）",
+  "version": "0.3.1",
+  "description": "记录删除、改写、脱敏、隔离等变更；action 表达动作，reason 表达原因。字段随语义泛化已改名：changed_by / changed_at。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id", "doc_id", "source", "stage", "action", "reason",
+    "changed_by", "changed_at"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "哪一次运行产生的变更；连接 meta.runs，幂等审计的钥匙"
+    },
+    "doc_id":   { "type": "string", "description": "被变更的记录" },
+    "source":   { "type": "string", "description": "冗余源标识，看板归因免 join" },
+    "stage":    {
+      "type": "string",
+      "description": "变更发生阶段；枚举钉死于 configs/reason_registry.json 的 stages 节"
+    },
+    "action": {
+      "type": "string",
+      "enum": ["remove", "modify", "redact", "quarantine"],
+      "description": "remove=删除；modify=改写；redact=PII 脱敏；quarantine=隔离待人工复核。注意：不建审批系统，全流程 auto，人工复核用 SQL 手改记录"
+    },
+    "reason": {
+      "type": "string",
+      "description": "原因码，引用 configs/reason_registry.json"
+    },
+    "detail": { "type": ["string", "null"] },
+
+    "ref_doc_id": {
+      "type": ["string", "null"],
+      "description": "被哪条记录压掉或参照"
+    },
+    "similarity": {
+      "type": ["number", "null"],
+      "minimum": 0, "maximum": 1,
+      "description": "MinHash Jaccard 估计值（[0,1]）；SimHash/汉明距离不入本字段"
+    },
+    "dup_cluster_id": {
+      "type": ["string", "null"],
+      "description": "所属近重复簇"
+    },
+
+    "pii_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["id_card", "phone", "bank_card", "address", "name", "email", "other"]
+      },
+      "description": "redact 时命中的 PII 类型"
+    },
+    "before_char_count": { "type": ["integer", "null"], "minimum": 0 },
+    "after_char_count":  { "type": ["integer", "null"], "minimum": 0 },
+
+    "old_hash": { "type": ["string", "null"], "description": "变更前内容哈希" },
+    "new_hash": { "type": ["string", "null"], "description": "变更后内容哈希" },
+
+    "review_status": {
+      "type": "string",
+      "enum": ["auto", "pending_review", "approved", "rejected"],
+      "description": "quarantine 必为 pending_review"
+    },
+    "reviewer": { "type": ["string", "null"] },
+
+    "changed_by": { "type": "string", "description": "规则/模型版本/作业名" },
+    "changed_at": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schema/unified_schema.v0.3.1.json",
+  "title": "Unified Document Schema",
+  "version": "0.3.1",
+  "policies": {
+    "id": "doc_id = sha256(source + ':' + source_id)。(source, source_id) 已是唯一自然键，键材料越少越稳。canonical_url 不参与 doc_id 计算：URL 规范化规则版本升级不得导致 doc_id 漂移——ID 一经发布永不复算。",
+    "time": "first_seen_at 为首次入库时间，重跑沿用旧值，参与幂等校验；last_seen_at 放 ingest 扩展，可更新，不参与幂等校验。",
+    "content": "脊柱 content 存规范化 Markdown；raw_uri 指向原始格式文件（HTML/PDF/WARC）；dedup/quality 在阶段内部派生纯文本，不回写。",
+    "hash": "content_hash = sha256(utf8(content))，ingest 阶段对存储的 content 字符串计算，不含任何规范化，作早筛精确指纹；跨格式严格去重由 dedup 阶段版本化的 normalized_content_hash 承担。",
+    "normalization": "normalized_content_hash 的规范化规则（NFC/NFKC、简繁折叠、全半角、空白）版本化到 configs/text_normalization.json；content 本身不简繁折叠。",
+    "source": "source 枚举由 configs/source_registry.json 驱动；新增源不改本 schema。",
+    "source_id": "有稳定主键的源（wiki revision_id、新闻 article_id）优先用源主键；无稳定主键的源（PDF、爬虫快照）用 sha256(raw_bytes)。"
+  },
+  "$defs": {
+    "unit_interval": {
+      "type": "number", "minimum": 0, "maximum": 1
+    },
+    "non_negative_int": {
+      "type": "integer", "minimum": 0
+    },
+    "pipeline_version": {
+      "type": "string", "description": "产出版本的代码/配置版本"
+    },
+    "source_metadata_value": {
+      "description": "源特化值；字符串/数字/布尔/同质数组/对象",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "type": ["string", "number", "boolean"] } },
+        { "type": "object" }
+      ]
+    }
+  },
+  "spine": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "doc_id", "schema_version", "source", "source_id", "url",
+      "content", "content_format", "language", "char_count",
+      "first_seen_at", "license"
+    ],
+    "properties": {
+      "doc_id": {
+        "type": "string",
+        "description": "确定性全局唯一 ID，见 policies.id"
+      },
+      "schema_version": {
+        "type": "string",
+        "description": "本记录遵循的 unified_schema 版本"
+      },
+      "source": {
+        "type": "string",
+        "description": "源标识，值由 configs/source_registry.json 驱动"
+      },
+      "source_id": {
+        "type": "string",
+        "description": "源内 ID，规则见 policies.source_id"
+      },
+      "url": {
+        "type": "string",
+        "description": "原始 URL 或对象存储定位符"
+      },
+      "canonical_url": {
+        "type": ["string", "null"],
+        "description": "按 configs/url_canonicalization.json 归一后的 URL；是数据不是键材料，不参与 doc_id 计算"
+      },
+      "content_hash": {
+        "type": "string",
+        "description": "sha256(utf8(content))，见 policies.hash；ingest 即算，早筛精确指纹"
+      },
+
+      "content": {
+        "type": "string",
+        "description": "规范化后的正文，见 policies.content"
+      },
+      "content_format": {
+        "type": "string",
+        "enum": ["markdown", "plain_text", "html", "json", "jsonl"],
+        "description": "content 的格式声明；json/jsonl 用于 SFT/QA 语料"
+      },
+      "raw_uri": {
+        "type": ["string", "null"],
+        "description": "原始格式文件位置，保留原始证据"
+      },
+      "original_encoding": {
+        "type": ["string", "null"],
+        "description": "原始字节编码：GB18030/BIG5/UTF-8/unknown；中文乱码排查用"
+      },
+
+      "language": {
+        "type": "string",
+        "description": "BCP-47，如 zh-Hans / zh-Hant-TW / yue / en"
+      },
+      "dominant_script": {
+        "type": "string",
+        "enum": ["Han", "Latin", "Han-Latin-Mixed", "Kana", "Hangul", "Other"],
+        "description": "主书写系统"
+      },
+      "language_confidence": {
+        "$ref": "#/$defs/unit_interval",
+        "description": "主语言识别置信度"
+      },
+      "language_mix": {
+        "type": "object",
+        "additionalProperties": { "$ref": "#/$defs/unit_interval" },
+        "description": "混排语言占比，如 {zh:0.72, en:0.28}；中文互联网常态"
+      },
+
+      "char_count": {
+        "$ref": "#/$defs/non_negative_int",
+        "description": "Unicode code points（含标点、拉丁字符）"
+      },
+      "cjk_char_count": {
+        "$ref": "#/$defs/non_negative_int",
+        "description": "汉字数（\\p{Script=Han}），中文长度过滤用；非中文源可为 0"
+      },
+      "utf8_byte_count": {
+        "$ref": "#/$defs/non_negative_int",
+        "description": "UTF-8 字节数，存储成本估算用"
+      },
+
+      "source_timestamp": {
+        "type": ["string", "null"],
+        "description": "源内事件时间，date-time / date / year-month 三种形态，由 timestamp_source 标识"
+      },
+      "timestamp_source": {
+        "type": "string",
+        "enum": ["meta", "jsonld", "url", "body_regex", "inferred", "none"],
+        "description": "source_timestamp 的抽取来源"
+      },
+      "first_seen_at": {
+        "type": "string", "format": "date-time",
+        "description": "首次入库时间；重跑沿用旧值，参与幂等校验"
+      },
+
+      "publisher": {
+        "type": ["string", "null"],
+        "description": "发布方/站点名，如 人民网、知乎、CSDN"
+      },
+      "domain": {
+        "type": ["string", "null"],
+        "description": "注册域名（eTLD+1），按站点做质量校准和黑名单"
+      },
+      "genre": {
+        "type": "string",
+        "enum": ["news", "forum", "blog", "qa", "wiki", "legal", "patent", "gov", "academic", "wenyan", "poetry", "mixed", "unknown"],
+        "description": "体裁，中文治理按体裁校准；ingest 先取 source_registry.default_genre，不建文体分类器"
+      },
+
+      "license": {
+        "type": "string",
+        "description": "具体许可名，如 CC BY-SA 4.0 / unknown；来源 configs/source_registry.json"
+      },
+      "license_status": {
+        "type": "string",
+        "enum": ["permissive", "restricted", "unknown", "prohibited"],
+        "description": "合规分级，release 过滤用"
+      },
+      "commercial_use": {
+        "type": "string",
+        "enum": ["allowed", "forbidden", "unknown"],
+        "description": "商用许可"
+      },
+
+      "source_metadata": {
+        "type": "object",
+        "additionalProperties": { "$ref": "#/$defs/source_metadata_value" },
+        "description": "源特有字段收敛容器；key 及类型必须登记在 docs/source_metadata_key_registry.md"
+      }
+    }
+  },
+  "stage_extensions": {
+    "ingest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ingest_run_id": { "type": "string" },
+        "last_seen_at": {
+          "type": "string", "format": "date-time",
+          "description": "最近一次见到；可更新，不参与幂等校验"
+        },
+        "pipeline_version": { "$ref": "#/$defs/pipeline_version" }
+      }
+    },
+    "dedup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "normalized_content_hash": {
+          "type": "string",
+          "description": "规范化后的 SHA-256；规范化规则见 policies.normalization"
+        },
+        "normalized_hash_version": {
+          "type": "string",
+          "description": "规范化规则的版本号（与 configs/text_normalization.json 对齐）"
+        },
+        "dup_cluster_id": {
+          "type": "string",
+          "description": "近重复簇 ID（MinHash/SimHash 聚类结果）"
+        },
+        "canonical_doc_id": {
+          "type": ["string", "null"],
+          "description": "簇内 canonical：最早/最完整/来源最可信"
+        },
+        "dedup_status": {
+          "type": "string",
+          "enum": ["unique", "dup_removed", "dup_kept"]
+        },
+        "shingle_unit": {
+          "type": "string", "enum": ["char", "word", "byte"],
+          "description": "中文按 char/word 差异大，显式声明"
+        },
+        "shingle_n": { "$ref": "#/$defs/non_negative_int" },
+        "similarity_algorithm": {
+          "type": "string", "enum": ["minhash", "simhash", "embedding", "exact"]
+        },
+        "minhash_signature_ref": {
+          "type": "string",
+          "description": "指向 schema/dedup_signature_schema.json 的签名表"
+        },
+        "dedup_run_id": { "type": "string" },
+        "pipeline_version": { "$ref": "#/$defs/pipeline_version" }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "quality_completeness":   { "$ref": "#/$defs/unit_interval" },
+        "quality_uniqueness":     { "$ref": "#/$defs/unit_interval" },
+        "quality_consistency":    { "$ref": "#/$defs/unit_interval" },
+        "quality_non_pollution":  { "$ref": "#/$defs/unit_interval", "description": "干净度（越高越干净）" },
+        "quality_length":         { "$ref": "#/$defs/unit_interval", "description": "按 genre 分桶校准" },
+        "quality_not_ai_generated": { "$ref": "#/$defs/unit_interval", "description": "进阶维度：W5 仅做代理指标（小模型困惑度/套话密度），不承诺分类器" },
+        "quality_non_template":   { "$ref": "#/$defs/unit_interval", "description": "进阶维度：非模板/套话" },
+        "quality_no_pii":         { "$ref": "#/$defs/unit_interval", "description": "由 clean 阶段 PII 扫描结果折算" },
+        "quality_score":          { "$ref": "#/$defs/unit_interval", "description": "维度加权总分，仅供排序；权重版本化在 configs/quality_weights.json（owner_todo）" },
+        "quality_model_version":  { "type": "string" },
+        "quality_run_id":         { "type": "string" },
+        "pipeline_version":       { "$ref": "#/$defs/pipeline_version" }
+      }
+    },
+    "mix": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mix_batch_id": { "type": "string" },
+        "token_count": {
+          "$ref": "#/$defs/non_negative_int",
+          "description": "按目标分词器在 mix 阶段计算"
+        },
+        "tokenizer_name":     { "type": "string" },
+        "tokenizer_version":  { "type": "string" },
+        "sampling_weight":    { "type": "number" },
+        "pipeline_version":   { "$ref": "#/$defs/pipeline_version" }
+      }
+    }
+  }
+}
