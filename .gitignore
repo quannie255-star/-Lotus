@@ -1,0 +1,20 @@
+# 数据目录：忽略内容，但保留 README（目录结构进 git）
+data/raw/*
+data/staging/*
+data/curated/*
+!data/*/README.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# 密钥与环境（HF token、S3 凭据等绝不进 git）
+.env
+*.env
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
