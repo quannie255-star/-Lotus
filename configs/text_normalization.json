@@ -1,17 +1,110 @@
 {
-  "version": "0.0.1-draft",
-  "status": "owner_todo：逐条定稿本文件。定稿前 normalized_content_hash 不得参与幂等校验（规则漂移 = 哈希漂移 = 幂等失效）。",
-  "purpose": "仅为 normalized_content_hash 服务；脊柱 content 本体不做简繁折叠等破坏性改写。",
-  "rules": [
-    { "id": "unicode_normalization", "spec": "TODO：NFC 还是 NFKC？（NFKC 会折叠全角字符与兼容字符，去重更激进，但对计量单位/商标字符有副作用）", "owner_todo": true },
-    { "id": "case_folding", "spec": "TODO：拉丁字母小写化？（汉字不涉及；确认是否折叠 ß/İ 等特殊用例）", "owner_todo": true },
-    { "id": "width_folding", "spec": "TODO：全角→半角（ＡＢＣ→ABC，２００６→2006）？若上面选 NFKC 则此项被覆盖", "owner_todo": true },
-    { "id": "whitespace", "spec": "TODO：连续空白折叠为单个空格、去首尾空白——是否保留换行结构？（Markdown 表格/代码块对空白敏感）", "owner_todo": true },
-    { "id": "trad_simp_folding", "spec": "TODO：繁→简折叠（OpenCC s2t 或 t2s？仅用于哈希，不改写 content）——同一简繁两版算不算重复？", "owner_todo": true },
-    { "id": "punctuation", "spec": "TODO：中文标点→英文标点归一（，→,）？对近重复判定影响大", "owner_todo": true }
+  "$schema": "../schema/text_normalization.schema.json",
+  "version": "1.0.0",
+  "updated_at": "2026-10-28",
+  "description": "文本规范化规则集。normalized_content_hash 与 T3 PII 去重均以此为准；规则变更必须递增 version。raw 原文另存，不经过本规则集。",
+
+  "pipeline_order": [
+    "remove_zero_width",
+    "remove_control_chars",
+    "unicode_nfkc",
+    "case_folding",
+    "trad_to_simp",
+    "punctuation",
+    "whitespace"
   ],
+
+  "unicode_form": "NFKC",
+  "case_folding": "lower",
+  "fold_traditional_to_simplified": true,
+  "traditional_to_simplified_mode": "t2s",
+  "width_folding": true,
+  "remove_zero_width": true,
+  "zero_width_chars": ["\u200b", "\u200c", "\u200d", "\ufeff"],
+  "remove_control_chars": true,
+  "control_chars_keep": ["\n", "\t", "\r"],
+
+  "whitespace": {
+    "normalize_unicode_spaces": true,
+    "collapse_runs": true,
+    "collapse_scope": "horizontal",
+    "trim": true,
+    "line_ending": "LF"
+  },
+
+  "punctuation": {
+    "enabled": true,
+    "note": "NFKC 已折叠全角 ASCII 变体（FF0C、FF01、FF1F、FF1A、FF1B、FF08、FF09、2026 等），本规则只处理 NFKC 不动的 CJK/通用标点变体，避免规则白写。",
+    "map": {
+      "、": ",",
+      "。": ".",
+      "《": "<",
+      "》": ">",
+      "“": "\"",
+      "”": "\"",
+      "‘": "'",
+      "’": "'",
+      "—": "-",
+      "–": "-",
+      "‒": "-",
+      "―": "-",
+      "⋯": "...",
+      "·": ".",
+      "・": "."
+    }
+  },
+
   "hash": {
     "algorithm": "sha256",
-    "input": "utf8(按上述规则顺序处理后的文本)"
+    "encoding": "hex",
+    "truncate": null,
+    "note": "normalized_content_hash = sha256(utf8(按 pipeline_order 处理后的文本)) 的完整 64 位 hexdigest（不截断）；content_hash = sha256(utf8(content))，同样不截断，且完全不经过本规则集——两者都只对 content 字符串的 utf8 字节取哈希，不对 raw 原始文件字节取哈希。"
+  },
+
+  "decisions": {
+    "unicode_form": {
+      "decision": "NFKC",
+      "reason": "去重与检索优先召回，NFKC 能统一全角 ASCII 变体与兼容字符；保真原文由 raw 字段承担，本规则集不为展示服务。"
+    },
+    "fold_traditional_to_simplified": {
+      "decision": "开启，方向固定为繁→简（t2s）",
+      "reason": "中文语料繁简混杂，不折叠会系统性漏重；繁→简是多对一、歧义小，简→繁才是一对多的高风险方向，故只做 t2s，多映射风险由 W4 实验量化后回填映射白名单。"
+    },
+    "case_folding": {
+      "decision": "lower",
+      "reason": "英文语料大小写不应造成重复，统一小写对中文无副作用。"
+    },
+    "width_folding": {
+      "decision": "开启（由 NFKC 承担）",
+      "reason": "全角字母数字已在 NFKC 中折叠，单独置 true 仅作显式声明与审计可读性，不重复处理。"
+    },
+    "remove_zero_width": {
+      "decision": "开启",
+      "reason": "零宽字符（200B/200C/200D/FEFF）常由复制粘贴引入，会造成视觉相同但哈希不同，必须剔除。"
+    },
+    "remove_control_chars": {
+      "decision": "开启，仅剔除 C0/C1 控制符，保留 \\n\\t\\r 交由 whitespace 规则处理（已机器可读化为 control_chars_keep）",
+      "reason": "控制符无检索价值且污染哈希；换行与制表先保留，由 whitespace 统一折叠，避免两处规则打架。"
+    },
+    "whitespace.collapse_runs": {
+      "decision": "开启，作用域限定为横向空白（collapse_scope=horizontal）",
+      "reason": "连续空格/制表在语义上等价；换行先保留，避免把 Markdown 表格、代码块、段落边界折叠掉。"
+    },
+    "whitespace.line_ending": {
+      "decision": "LF",
+      "reason": "跨 Windows/Linux 拉取的语料行尾不一致，统一 LF 才能保证同一内容哈希稳定。"
+    },
+    "punctuation.enabled": {
+      "decision": "开启，只映射 NFKC 不处理的 CJK/通用标点变体",
+      "reason": "NFKC 只折叠全角 ASCII 与兼容字符，中文句读、弯引号、2013/2014 破折号、22EF 省略号均不在其内，punctuation 规则不是白写。"
+    },
+    "hash.truncate": {
+      "decision": "null，保留完整 64 位",
+      "reason": "16 位截断在百万级语料上碰撞概率不可忽略，存储代价相比重跑全库可接受；T1 验收将覆盖幂等与不同内容区分。"
+    },
+    "pipeline_order": {
+      "decision": "零宽→控制符→NFKC→小写→t2s→标点→空白",
+      "reason": "顺序参与哈希不得隐式：NFKC 必须先于小写（否则全角 Ｋ 无小写形态导致结果依赖输入形态）；t2s 放在 NFKC 之后可吃兼容分解出的汉字；空白必须最后做，否则标点替换引入的空格逃过折叠。"
+    }
   }
 }

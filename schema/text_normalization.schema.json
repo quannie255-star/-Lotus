@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schema/text_normalization.schema.v1.0.0.json",
+  "title": "Text Normalization Config",
+  "version": "1.0.0",
+  "description": "configs/text_normalization.json 的元 schema。配置是 normalized_content_hash 的唯一规则来源，规则或顺序变化必须递增 version，否则哈希漂移。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "updated_at", "description", "pipeline_order",
+    "unicode_form", "case_folding",
+    "fold_traditional_to_simplified", "width_folding",
+    "remove_zero_width", "remove_control_chars",
+    "whitespace", "punctuation", "hash", "decisions"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "语义化版本；任何影响输出的改动都必须递增（写入 normalized_hash_version）"
+    },
+    "updated_at": { "type": "string", "format": "date" },
+    "description": { "type": "string" },
+
+    "pipeline_order": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "remove_zero_width",
+          "remove_control_chars",
+          "unicode_nfkc",
+          "case_folding",
+          "trad_to_simp",
+          "punctuation",
+          "whitespace"
+        ]
+      },
+      "description": "规则应用顺序。顺序参与哈希，必须显式声明并版本化；实现必须按此数组执行，不得内建隐式顺序"
+    },
+
+    "unicode_form": { "type": "string", "enum": ["NFC", "NFKC", "NFD", "NFKD", "none"] },
+    "case_folding": { "type": "string", "enum": ["lower", "casefold", "none"] },
+    "fold_traditional_to_simplified": { "type": "boolean" },
+    "traditional_to_simplified_mode": { "type": "string", "enum": ["t2s", "s2t"] },
+    "width_folding": {
+      "type": "boolean",
+      "description": "NFKC 开启时由 NFKC 承担，本字段仅作显式声明，不得二次处理"
+    },
+    "remove_zero_width": { "type": "boolean" },
+    "zero_width_chars": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 1 },
+      "description": "remove_zero_width 的字符黑名单（机器可读版），如 U+200B/U+200C/U+200D/U+FEFF"
+    },
+    "remove_control_chars": { "type": "boolean" },
+    "control_chars_keep": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 1 },
+      "description": "remove_control_chars 的例外白名单（机器可读版）。C0/C1 中必须保留的字符，如换行、制表、回车"
+    },
+
+    "whitespace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalize_unicode_spaces", "collapse_runs", "trim", "line_ending"],
+      "properties": {
+        "normalize_unicode_spaces": { "type": "boolean" },
+        "collapse_runs": { "type": "boolean" },
+        "collapse_scope": {
+          "type": "string",
+          "enum": ["horizontal", "all"],
+          "description": "horizontal=只折叠空格/制表等横向空白，保留换行结构；all=连换行一起折叠为单个空格"
+        },
+        "trim": { "type": "boolean" },
+        "line_ending": { "type": "string", "enum": ["LF", "CRLF"] }
+      },
+      "if": { "properties": { "collapse_runs": { "const": true } } },
+      "then": { "required": ["collapse_scope"] }
+    },
+
+    "punctuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "map"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "note": { "type": "string" },
+        "map": {
+          "type": "object",
+          "description": "key 必须单字符；只允许映射 NFKC 不折叠的 CJK/通用标点，避免与 NFKC 重复劳动",
+          "propertyNames": { "minLength": 1, "maxLength": 1 },
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+
+    "hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "encoding", "truncate"],
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["sha256"] },
+        "encoding": { "type": "string", "enum": ["hex", "base64url"] },
+        "truncate": {
+          "type": ["integer", "null"],
+          "minimum": 8,
+          "description": "null = 保留完整 64 位 hexdigest；T1 决策为 null"
+        },
+        "note": { "type": "string" }
+      }
+    },
+
+    "decisions": {
+      "type": "object",
+      "description": "决策台账：owner 对每条规则的「决定 + 一句理由」。定稿后不再有 owner_todo:true 这种待办标记。",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["decision", "reason"],
+        "properties": {
+          "decision": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+
+  "if": { "properties": { "fold_traditional_to_simplified": { "const": true } } },
+  "then": { "required": ["traditional_to_simplified_mode"] },
+
+  "allOf": [
+    {
+      "if": { "properties": { "remove_control_chars": { "const": true } } },
+      "then": { "required": ["control_chars_keep"] }
+    },
+    {
+      "if": { "properties": { "remove_zero_width": { "const": true } } },
+      "then": { "required": ["zero_width_chars"] }
+    }
+  ]
+}
