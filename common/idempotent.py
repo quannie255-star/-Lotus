@@ -1,0 +1,123 @@
+"""common/idempotent.py — 阶段级幂等（T4）
+
+同一 stage 对同一批输入重跑：
+1. 零重复处理：输入指纹没变、产物哈希与 manifest 记录一致 → 直接返回旧产物
+2. 输出字节级一致：同样输入两次跑出的文件 sha256 相同（靠确定性 transform + 固定写入方式）
+3. 不产生重复 changelog：由 changelog.append_change(dedupe=True) 保证
+
+每个 run 都会在 runs.jsonl 留 start/finish 对（缓存命中也留，note="cached"），
+这样"哪些 run 干活了、哪些只是命中缓存"在审计链上是可查的。
+"""
+
+import hashlib
+import json
+import shutil
+import uuid
+from pathlib import Path
+
+from common import runs
+
+
+def _sha256_file(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def fingerprint(paths):
+    """输入指纹 = 有序（文件名 + 长度 + 内容 sha256）的链式哈希。"""
+    digest = hashlib.sha256()
+    for path in sorted((Path(p) for p in paths), key=lambda p: str(p)):
+        if not path.exists():
+            raise FileNotFoundError(f"输入文件不存在: {path}")
+        data = path.read_bytes()
+        digest.update(path.name.encode("utf-8"))
+        digest.update(str(len(data)).encode("ascii"))
+        digest.update(hashlib.sha256(data).digest())
+    return digest.hexdigest()
+
+
+def load_manifest(manifest_path):
+    """读 manifest；文件不存在就是空台账。"""
+    path = Path(manifest_path)
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_manifest(manifest, manifest_path):
+    """先写 .tmp 再 replace，避免写一半断电留下半个 JSON。"""
+    path = Path(manifest_path)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _outputs_intact(final_dir, expected_hashes):
+    """验货：产物目录里的文件必须和 manifest 记录的哈希逐个对上。
+
+    只有"输入指纹相同"是不够的——中间可能有人手改了产物、或半截写入，
+    那样命中缓存等于把脏数据当成合格产物发出去。
+    """
+    if not expected_hashes:
+        return False
+    for name, expected in expected_hashes.items():
+        path = Path(final_dir) / name
+        if not path.is_file() or _sha256_file(path) != expected:
+            return False
+    return True
+
+
+def run_stage(stage, transform, input_paths, output_dir, force=False, runs_path=None, pipeline_version="dev"):
+    """幂等执行一个 stage，并把这次执行记进 runs 审计链。
+
+    transform(input_paths, work_dir, run_id) -> 产物路径列表
+    返回 {"cached": bool, "run_id": str, "output_dir": Path, "output_hashes": {...}}
+    """
+    run_id = runs.start(stage, pipeline_version=pipeline_version, path=runs_path)
+    try:
+        result = _execute(stage, transform, input_paths, output_dir, run_id, force)
+    except Exception as exc:  # 失败也留痕：审计链上必须是 failed 而不是"没有这次运行"
+        runs.finish(run_id, "failed", note=f"{type(exc).__name__}: {exc}", path=runs_path)
+        raise
+
+    runs.finish(run_id, "success", note="cached" if result["cached"] else "executed", path=runs_path)
+    result["run_id"] = run_id
+    return result
+
+
+def _execute(stage, transform, input_paths, output_dir, run_id, force):
+    out_root = Path(output_dir)
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    manifest_path = out_root / "manifest.json"
+    manifest = load_manifest(manifest_path)
+    input_fp = fingerprint(input_paths)
+    final_dir = out_root / stage
+
+    entry = manifest.get(stage) or {}
+    if (
+        not force
+        and entry.get("input_fingerprint") == input_fp
+        and final_dir.exists()
+        and _outputs_intact(final_dir, entry.get("output_hashes", {}))
+    ):
+        return {"cached": True, "output_dir": final_dir, "output_hashes": entry["output_hashes"]}
+
+    work_dir = out_root / f".{stage}.tmp-{uuid.uuid4().hex[:8]}"
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    work_dir.mkdir(parents=True)
+
+    outputs = [Path(p) for p in (transform(input_paths, work_dir, run_id) or [])]
+
+    if final_dir.exists():
+        shutil.rmtree(final_dir)
+    work_dir.rename(final_dir)
+
+    output_hashes = {
+        p.name: _sha256_file(final_dir / p.name) for p in outputs if (final_dir / p.name).exists()
+    }
+
+    manifest[stage] = {"input_fingerprint": input_fp, "output_hashes": output_hashes}
+    _write_manifest(manifest, manifest_path)
+
+    return {"cached": False, "output_dir": final_dir, "output_hashes": output_hashes}

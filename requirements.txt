@@ -1,0 +1,5 @@
+pytest==9.0.2
+jsonschema==4.26.0
+zhconv==1.4.3
+datasets==5.0.1
+huggingface_hub==0.36.2
