@@ -23,7 +23,15 @@ def _sha256_file(path):
 
 
 def fingerprint(paths):
-    """输入指纹 = 有序（文件名 + 长度 + 内容 sha256）的链式哈希。"""
+    """输入指纹 = 有序（文件名 + 长度 + 内容 sha256）的链式哈希。
+
+    参数: paths — 输入文件路径的可迭代对象
+    返回: 64 位 hex str；同名同内容的多文件输入与单文件输入指纹不同（顺序按路径字符串排序，稳定）
+    异常: FileNotFoundError — 任一输入不存在（带路径名，坏输入不静默）
+    幂等: 纯函数，无副作用
+    注意: 只盖「数据输入」。配置文件的指纹化见 WP-01 §2.1 configs_digest（M4 落地，
+          在那之前改配置需手动 force，属已知缺陷，见 DEVLOG M1 遗留）
+    """
     digest = hashlib.sha256()
     for path in sorted((Path(p) for p in paths), key=lambda p: str(p)):
         if not path.exists():
@@ -67,10 +75,24 @@ def _outputs_intact(final_dir, expected_hashes):
 
 
 def run_stage(stage, transform, input_paths, output_dir, force=False, runs_path=None, pipeline_version="dev"):
-    """幂等执行一个 stage，并把这次执行记进 runs 审计链。
+    """幂等执行一个 stage，并把这次执行记进 runs 审计链（DEVLOG M1-D3）。
 
-    transform(input_paths, work_dir, run_id) -> 产物路径列表
-    返回 {"cached": bool, "run_id": str, "output_dir": Path, "output_hashes": {...}}
+    参数:
+        stage — 阶段名，必须 ∈ configs/reason_registry.json 的 stages
+        transform — transform(input_paths, work_dir, run_id) -> 产物路径列表；
+                    必须确定性（同输入同字节输出），时间类信息走台账（FirstSeenLedger 范式）
+        input_paths — 输入文件列表（进入指纹）
+        output_dir — 阶段产物根目录；产物落在 {output_dir}/{stage}/，台账 manifest.json 同级
+        force — True 时无视缓存强制重算（重算结果应与缓存字节一致，否则 transform 不确定）
+        runs_path — runs.jsonl 路径；None 用默认 data/meta/runs.jsonl
+        pipeline_version — 记入 runs 事件的代码/配置版本标识
+    返回: {"cached": bool, "run_id": str, "output_dir": Path, "output_hashes": {文件名: sha256}}
+    异常:
+        ValueError — stage 非法（runs.new_run_id 校验）
+        FileNotFoundError — 输入缺失（fingerprint）
+        transform 抛出的任何异常 — 原样上抛，但先记 runs finish(failed)
+    幂等: 命中条件 = 输入指纹一致 ∧ manifest 存在 ∧ 产物逐文件哈希验货通过（缓存要验货，
+          DEVLOG M1-D2）；命中时 transform 零执行、runs 仍记一对 start/finish(note=cached)
     """
     run_id = runs.start(stage, pipeline_version=pipeline_version, path=runs_path)
     try:

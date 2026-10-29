@@ -153,7 +153,11 @@ def schema_version():
 def download(n_shards: int = 1) -> list:
     """把 20231101.zh 的前 n_shards 个分片拉到本地 HF 缓存，返回路径列表。
 
-    断点续传与缓存命中由 hf_hub_download 负责——这就是"下载级幂等不必自己造"的意思。
+    参数: n_shards — 取前几个分片，1..N_SHARDS
+    返回: 已下载分片的本地路径列表（HF 缓存内）
+    异常: ValueError — n_shards 越界；网络/鉴权错误由 hf_hub_download 原样上抛
+    幂等: 下载级幂等由 hf_hub_download 承担（缓存命中零下载、断点续传、完整性校验）；
+          与处理级幂等的咬合点：返回的文件列表直接作为 run_stage 的输入指纹
     """
     if not 1 <= n_shards <= N_SHARDS:
         raise ValueError(f"n_shards 必须在 1..{N_SHARDS} 之间，收到 {n_shards}")
@@ -281,8 +285,15 @@ def _make_transform(ledger, counts):
 def run(n_shards: int = 1, force: bool = False, output_dir=None, ledger_path=None, runs_path=None) -> dict:
     """跑 ingest 阶段：download（下载级幂等）→ run_stage（处理级幂等）→ 本地 parquet。
 
-    返回 {"cached", "run_id", "output_dir", "output_hashes", "shards", "rows"}。
-    第二遍同样输入：cached=True，transform 零执行，台账零写入。
+    参数:
+        n_shards — 前 n 个分片；force — 强制重算；output_dir/ledger_path/runs_path —
+        测试注入点（生产用默认值）
+    返回: {"cached", "run_id", "output_dir", "output_hashes", "shards", "rows", "outputs"}；
+          cached=True 时 rows=None（零计算的证据）、台账零写入
+    异常: 源缺列/缺主键 → ValueError（map_row fail-fast，坏行不静默）；
+          写盘失败 → 异常上抛，runs 记 failed，产物目录保持旧版
+    幂等: 双层——下载级（hf_hub_download 缓存）+ 处理级（run_stage 指纹+验货）；
+          force 重算与首跑字节一致（first_seen 走台账，时钟不进数据行，DEVLOG M1-D1）
     """
     shards = download(n_shards)
     ledger = FirstSeenLedger(Path(ledger_path) if ledger_path else LEDGER_PATH)
@@ -308,11 +319,21 @@ def run(n_shards: int = 1, force: bool = False, output_dir=None, ledger_path=Non
 
 
 def main(argv=None):  # pragma: no cover - 手工跑的口子
-    """python -m ingest.wiki [n_shards] —— 手工跑一次，打印结果摘要。"""
+    """python -m ingest.wiki [n_shards] —— 手工跑一次，打印结果摘要。
+
+    日志走 stderr（LOG_LEVEL 可调，见 MANUAL 反查表），摘要 json 走 stdout——
+    stdout 只放结构化结果，人看的进度在 stderr，管道可安全重定向。
+    """
     import sys
 
+    from common import log
+
+    log.setup()
     argv = list(sys.argv[1:] if argv is None else argv)
+    logger = log.get_logger(__name__)
+    logger.info("ingest.wiki 启动, n_shards=%s", argv[0] if argv else 1)
     result = run(n_shards=int(argv[0]) if argv else 1)
+    logger.info("完成 cached=%s rows=%s", result["cached"], result["rows"])
     print(json.dumps({k: v for k, v in result.items() if k != "shards"}, ensure_ascii=False, indent=2, default=str))
 
 
