@@ -39,15 +39,31 @@
 
 - 首版 `classify_row` 把「非字符串 content」和「空 content」合并成一个条件，测试
   `row2-bad_content_type` 当场逮住（reason 误报 empty_content）——拆成两个分支修复。
-  这是「测试先红」流程的又一次兑现。
+- **护栏语义重构（实跑教训，M2-D5）**：首版护栏是「每片独立判 5%」。CLI 默认路径实跑
+  必炸——mock 分片只有 50 行，二项方差大到真实坏行率 3% 时单片超 5% 的概率约 55%；
+  即使把 mock 默认降到 3%，4 片里仍有约 1/4 概率撞线。根因是把 run 级属性（源结构
+  漂移）放到了片级判定。重构为 `_check_guardrail`：**run 级聚合判定**，消息携带分片
+  明细；单片的随机波动被聚合稀释（3/200=1.5% 不触发），系统性漂移（全坏）必触发。
+  重构过程中还修了一个测试构造错误：4 片各 3/50 是系统性 6% 而非「波动」，护栏拒它
+  是正确行为——错的是测试数据，不是代码。
+- 审计链同步验证：护栏触发的那次运行在 runs.jsonl 里留下 `status: failed` +
+  note=完整异常——「失败留痕」按设计工作。
 
-### 怎么验证的
+### 怎么验证的（全部实跑）
 
 ```
 $ python -m pytest -q
-80 passed in 2.57s     （68 → 80，新增 12）
-$ python -m ingest.oscar
-{"cached": false, "rows": 192, "quarantined": 8, ...}   （mock 4×50, bad_ratio 0.04）
+80 passed in 2.64s          （68 → 80）
+
+$ python -m ingest.oscar    # 修复后首次实跑（mock 4×50, 聚合坏行 2.5%）
+{"cached": false, "rows": 195, "quarantined": 5, "run_id": "ingest-20261029T183606Z-112d75b5", ...}
+
+$ python -m ingest.oscar    # 重跑
+{"cached": true, "rows": null, "quarantined": null, ...}   ← 零计算的证据
+
+$ tail -2 data/meta/runs.jsonl   （护栏事件留痕）
+{"event": "finish", "status": "failed",
+ "note": "ValueError: oscar_part_4.jsonl 坏行率 6.0% 超护栏 5%（3/50）……", ...}
 ```
 
 ### 微调入口

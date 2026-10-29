@@ -94,11 +94,16 @@ def test_language_falls_back_to_policy_default(ledger):
 # ---------------------------------------------------------------- 护栏与 run
 
 def test_guardrail_trips_on_structural_drift(tmp_path, ledger):
-    bad = tmp_path / "drift.jsonl"
-    rows = [{"no_expected_field": i} for i in range(10)]  # 全部缺身份：结构漂移
-    bad.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    """护栏是 run 级聚合语义：单片小样本的随机波动不触发，聚合性漂移（全坏）必触发。"""
+    # 随机波动 = 单片偏高（3/50=6%）其余干净，聚合 3/200=1.5% → 不触发
+    stats = ([{"shard": "s0.jsonl", "ok": 47, "quarantined": 3}]
+             + [{"shard": f"s{i}.jsonl", "ok": 50, "quarantined": 0} for i in range(1, 4)])
+    assert oscar._check_guardrail(stats) == pytest.approx(3 / 200)
+
+    # 结构漂移：全坏 → 必须炸
+    drift = [{"shard": f"d{i}.jsonl", "ok": 0, "quarantined": 10} for i in range(3)]
     with pytest.raises(ValueError, match="护栏"):
-        oscar._write_shard(bad, tmp_path / "o.parquet", tmp_path / "q.parquet", ledger)
+        oscar._check_guardrail(drift)
 
 
 def test_run_is_idempotent_and_quarantines(tmp_path):

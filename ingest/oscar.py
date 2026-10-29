@@ -82,7 +82,9 @@ _BAD_RECIPES = ("empty_content", "missing_identity", "bad_content_type")
 
 
 def write_mock_shards(out_dir: Path, n_shards: int = 4, rows_per_shard: int = 50,
-                      bad_ratio: float = 0.1, seed: int = 42) -> list:
+                      bad_ratio: float = 0.03, seed: int = 42) -> list:
+    """bad_ratio 默认 0.03：必须显著低于护栏 0.05——默认参数自己撞护栏 = CLI 入口坏掉
+    （2026-10-30 实跑教训：0.1 时单片 3/50=6% 的随机波动就触发 fail-fast）。"""
     """生成 mock 分片（jsonl）。确定性：同 seed 同字节。
 
     参数: out_dir — 输出目录；n_shards/rows_per_shard — 规模；bad_ratio — 坏行占比；seed — 种子
@@ -189,7 +191,7 @@ def iter_lines(path: Path) -> Iterator[tuple[int, str]]:
 
 
 def _write_shard(input_path: Path, out_path: Path, q_path: Path, ledger) -> dict:
-    """一个分片 → spine part + quarantine part。返回计数 {ok, quarantined, guardrail_ratio}。"""
+    """一个分片 → spine part + quarantine part。返回计数（不判护栏——护栏是 run 级语义）。"""
     ok_rows, q_rows = [], []
     for line_no, text in iter_lines(input_path):
         try:
@@ -199,19 +201,35 @@ def _write_shard(input_path: Path, out_path: Path, q_path: Path, ledger) -> dict
         fate, payload = classify_row(raw if raw is not None else text, ledger, input_path.name, line_no)
         (ok_rows if fate == "ok" else q_rows).append(payload)
 
-    total = len(ok_rows) + len(q_rows)
-    ratio = (len(q_rows) / total) if total else 0.0
-    if ratio > policy()["oscar"]["bad_row_guardrail"]:
-        raise ValueError(
-            f"{input_path.name} 坏行率 {ratio:.1%} 超护栏 {policy()['oscar']['bad_row_guardrail']:.0%}"
-            f"（{len(q_rows)}/{total}）——疑似源结构漂移，整片拒绝而非静默产出"
-        )
-
     if ok_rows:
         pq.write_table(pa.Table.from_pylist(ok_rows, schema=SPINE_PARQUET_SCHEMA), out_path)
     if q_rows:
         pq.write_table(pa.Table.from_pylist(q_rows, schema=QUARANTINE_SCHEMA), q_path)
-    return {"ok": len(ok_rows), "quarantined": len(q_rows), "ratio": ratio}
+    return {"shard": input_path.name, "ok": len(ok_rows), "quarantined": len(q_rows)}
+
+
+def _check_guardrail(stats: list) -> float:
+    """run 级聚合护栏：总坏行率超阈值 → 整 run fail-fast。
+
+    为什么聚合而不是每片独立判：小分片（mock 50 行）的比率方差大到 3% 的真实坏行率都有
+    ~55% 概率单片超 5%（二项分布，2026-10-30 实跑教训）；聚合让护栏在 mock 与真实分片
+    （十万行级，方差可忽略）下语义一致。「结构漂移」本来就是 run 级属性。
+
+    参数: stats — 每片 {shard, ok, quarantined} 计数列表
+    返回: 聚合坏行率（不超阈值时）
+    异常: ValueError — 聚合比率超 configs/ingest_policy.json 的 bad_row_guardrail，消息含分片明细
+    """
+    total = sum(s["ok"] + s["quarantined"] for s in stats) or 1
+    quarantined = sum(s["quarantined"] for s in stats)
+    ratio = quarantined / total
+    limit = policy()["oscar"]["bad_row_guardrail"]
+    if ratio > limit:
+        detail = ", ".join(f"{s['shard']}:{s['quarantined']}/{s['ok'] + s['quarantined']}" for s in stats)
+        raise ValueError(
+            f"坏行率 {ratio:.1%} 超护栏 {limit:.0%}（{quarantined}/{total}；分片: {detail}）"
+            "——疑似源结构漂移，整 run 拒绝而非静默产出"
+        )
+    return ratio
 
 
 def download(n_shards: int | None = None) -> list:
@@ -251,14 +269,16 @@ def run(force: bool = False, output_dir=None, ledger_path=None, runs_path=None,
     counters = {"quarantined": 0, "ok": 0}
 
     def transform(input_paths, work_dir, run_id):
-        outputs = []
+        outputs, all_stats = [], []
         for index, input_path in enumerate(sorted((Path(p) for p in input_paths), key=str)):
             out_path = Path(work_dir) / f"part-{index:05d}.parquet"
             q_path = Path(work_dir) / f"quarantine-{index:05d}.parquet"
             stats = _write_shard(input_path, out_path, q_path, ledger)
+            all_stats.append(stats)
             counters["ok"] += stats["ok"]
             counters["quarantined"] += stats["quarantined"]
             outputs.extend([p for p in (out_path, q_path) if p.exists()])
+        counters["ratio"] = _check_guardrail(all_stats)
         return outputs
 
     result = run_stage(
