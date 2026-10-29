@@ -144,7 +144,7 @@ Hadoop/AWS SDK 版本；把补丁做成 Dockerfile（可复现），不要靠人
 | 2 | Metastore 的 JDBC 驱动 | `docker compose logs metastore \| grep -i "no suitable driver"` | 无输出 | ❌→✅：镜像确实不带，挂 `postgresql-42.7.4.jar` 修复（见 #005 坑二） |
 | 3 | Metastore schema | `docker compose exec metastore schematool -dbType postgres -info` | 返回版本 | ❌→✅：先撞 Derby 引擎，改 `SERVICE_OPTS` 后 `initSchema` 成功（见 #005 坑一） |
 | 4 | MinIO bucket | `docker compose exec minio mc ls local` | 有 warehouse / logs | ✅ `warehouse`+`logs` 由 `MINIO_DEFAULT_BUCKETS` 自动建；`raw`/`staging` 未自动建，ingest 前补 |
-| 5 | 全链路冒烟 | `spark-sql -e "CREATE DATABASE IF NOT EXISTS smoke; SHOW DATABASES;"` | 输出含 smoke 且 warehouse 有目录 | ✅ CREATE/INSERT/SELECT 全通，warehouse 桶见 `smoke_t/` |
+| 5 | 全链路冒烟 | `spark-sql -e "CREATE DATABASE IF NOT EXISTS smoke; SHOW DATABASES;"` | 输出含 smoke 且 warehouse 有目录 | ⚠️→✅ 读链路（SHOW→metastore→PG）✅；写链路走 **datasource 路径**通过：`CREATE TABLE ... USING parquet LOCATION 's3a://warehouse/smoke_t'`，INSERT/SELECT 2 行全通，mc 确认桶内 `smoke_t/`。Hive-managed 的 `CREATE DATABASE`（让 metastore 去 mkdir s3a）仍报错，属已知差异（见 #005 坑五），我们的真实用法（引擎写数据、W7 Iceberg）不依赖它 |
 
 **规则**：跑完一条就把「实际」填上；失败就在下面加一篇 #005，写清命令、现象、修法。
 
@@ -262,6 +262,30 @@ Derby 连接去跑 postgres 初始化脚本，报 `Syntax error: Encountered sta
 
 **带走**：往镜像塞文件后，必问"运行用户是谁、文件属主与权限是谁"；`ClassNotFound` 先
 `ls -l` + `id` 排除权限/属主，再怀疑缺文件——省一次瞎猜。
+
+### 坑四：凭据 Provider 类名——同名概念在两个包里，只有一个存在
+
+**症状**：S3AFileSystem 加载成功后，下一层报 `ClassNotFoundException:
+org.apache.hadoop.fs.s3a.EnvironmentVariableCredentialsProvider`。
+
+**本质**：hadoop-aws 3.3.4 里**没有**这个名字的类（那个名字在别的 Hadoop 版本线里）；
+"从环境变量读 AWS 凭据"的实现在 AWS SDK 包里：`com.amazonaws.auth.EnvironmentVariableCredentialsProvider`。
+`fs.s3a.aws.credentials.provider` 接受任何 AWSCredentialsProvider 实现，安全语义相同（密钥仍只走环境变量）。
+
+**带走**：配置一个"类名"之前，先在对应的 jar 里确认它存在（`unzip -l` / javap）；
+报 ClassNotFound 时区分三种死法：真没有（#005 坑三）、有但读不了（#005 坑三 chmod）、
+名字记错了（本坑）。
+
+### 坑五：eventLog 写 s3a 的虚拟前缀——两连败后止损
+
+**症状**：`spark.eventLog.dir=s3a://logs/spark-events` 报 `FileNotFoundException`（S3 的
+"目录"只是前缀，不存在实体）；改成桶根 `s3a://logs/` 又撞 `path must be absolute`（S3Guard 校验）。
+
+**修法**：`spark.eventLog.enabled=false` 暂关，记入 backlog——方案是初始化时在
+`logs/spark-events/` 前缀下放一个 `.keep` 哨兵对象再启用。**W1 验收不依赖它，不在基础设施周耗时间。**
+
+**带走**：锦上添花的功能（可回放 event log）挡住主线（全链路冒烟）时，止损优先级 >
+死磕；但止损必须留下「为什么关 + 恢复条件 + 方案」，否则就是遗忘，不是取舍。
 
 ### 本篇口试（owner 补答）
 
