@@ -106,11 +106,12 @@
 - [x] **T3** `clean/pii.py`：身份证 MOD 11-2 + 出生日期校验、银行卡 Luhn、手机号、邮箱；长数字串防误匹配；`redact()` 返回命中类型供 changelog 使用（8 个测试）
 - [x] **T4** `common/idempotent.py`：输入指纹 → 命中前**重算产物哈希验货**（必修 1）、临时目录 + 原子替换、manifest 记产物哈希、重跑字节一致、失败也留 failed 事件（8 个测试）
 - [x] **跨模块集成测试**（必修 2）：一次 stage 运行 → runs 里 start/finish 对 → changelog 记录带同一 run_id → 重跑零新增、标 cached
-- [ ] **compose 课开场**：先交自己写的三题答案 ——
-  - ① Spark 靠什么找到 MinIO、服务名为什么重要
-  - ② Metastore 为什么需要 PostgreSQL、元数据和数据的区别
-  - ③ 六个容器谁要持久化卷、谁随便重启
-  - 然后写第一版 `docker-compose.yml`，等 review
+- [x] **compose 课**：三题已答（V4 + compose ①②），第一版 `docker-compose.yml` 已交，review 后进入第二版
+  - ① Spark 靠什么找到 MinIO、服务名为什么重要 ✅（V4）
+  - ② Metastore 为什么需要 PostgreSQL、元数据和数据的区别 ✅
+  - ③ 六个容器谁要持久化卷、谁随便重启 ✅
+- [x] compose review 三必修：S3A jar 走 Dockerfile 预置、spark 凭据改环境变量、metastore 两处未知数列入 boot 检查单
+- [ ] **boot 测试**：本机 Docker daemon 未运行，检查单见 `docs/dev-lessons.md`，五项全部待验证
 
 ---
 
@@ -134,6 +135,13 @@
 - [ ] `BANK_CARD_RE` 边界只挡数字不挡字母，`AB123456789012345678CD` 这类字母包裹串有概率碰巧过 Luhn；补 `(?<![0-9A-Za-z])` 前后断言
 - [ ] `runs.finish` 每次全量读日志，append-only 的已知代价；规模化换 SQLite 或内存索引
 - [ ] `now_iso` 在 `runs.py` 与 `changelog.py` 各写一份，该收进 `common/__init__.py`（或 `common/timeutil.py`）
+
+### compose review 小项（已处理）
+
+- [x] Kafka 发布了 9092 但广播 `kafka:9092`，宿主机客户端解析不到 → 判定**消费方都在网内**，删掉端口发布并注释说明；将来要宿主消费再加 `PLAINTEXT_HOST` listener
+- [x] 注释「只发布三个端口」与实际不符 → 改为逐个列出五个端口及用途
+- [x] `bitnami/kafka:3.7` 浮动 tag → pin `3.7.1`
+- [ ] 镜像 tag 存在性未验证（离线环境，Docker Hub 不可达）：`bitnami/kafka:3.7.1`、`apache/hive:4.0.0` 均需 boot 时 `docker pull` 确认
 
 ---
 

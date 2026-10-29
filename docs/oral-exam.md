@@ -63,3 +63,41 @@
 ## 提交方式
 
 把本文件挂到对应 commit 的正文里（或保留在 `docs/` 下并让 commit 引用它），不要只留在聊天记录里。
+
+---
+
+# compose 课（第 1–2 题）
+
+## ① Hive Metastore 为什么需要 PostgreSQL？「元数据」和 MinIO 里的「数据」差在哪？
+
+**答**：Metastore 存的是**目录**——有哪些库、表、分区、字段类型、存储格式、表数据在哪个 `s3a://` 路径、serde 参数、统计信息；这些要被 Spark、Trino、Hive、Airflow 同时访问，需要事务、行锁、唯一约束、崩溃恢复，是典型的 OLTP 负载，所以必须是一个共享的服务端数据库。早期默认的嵌入式 Derby 是"单进程文件锁"，一个 JVM 打开后别的进程打不开，多客户端场景根本走不通；PostgreSQL 用一行 `DB_URI` 就解决了并发、约束与备份。
+
+**元数据 vs 数据**：MinIO 里是**实物**（Parquet/ORC 文件、原始 PDF/HTML），Metastore（PostgreSQL）里是**卡片目录**（表叫什么、字段什么类型、文件在哪、多少行）。丢了 MinIO，目录还在但指向空气；丢了 PostgreSQL，文件都还在，却不知道该读哪些、按什么 schema 读——分区表还能靠 `MSCK REPAIR TABLE` 从路径反推救回一部分，表定义、类型、统计信息基本救不回来。所以 PostgreSQL 是唯一真源、必须持久化且要备份，MinIO 是数据本体。
+
+## ② 六个容器谁要持久化卷、谁挂了随便重启？
+
+**答**：
+
+| 容器 | 卷 | 一句话理由 |
+|---|---|---|
+| PostgreSQL | **必须** | 唯一真源：metastore 元数据 + airflow 元数据库；丢 = 重建地狱 |
+| MinIO | **必须** | 数据本体：warehouse / raw / staging |
+| Kafka | **必须** | 消息日志就是状态，未消费的 topic 数据随容器一起没 |
+| Airflow | **部分** | 容器无状态（元数据在 PG），但 DAG 是代码、日志是排障证据，两者要卷 |
+| Spark | **不需要** | master/worker 无状态，挂了重启；正在跑的 job 靠 T4 幂等重跑 |
+| Metastore | **不需要** | 状态全在 PG + MinIO，容器重启只是重新连库 |
+
+判断标准只有一句：**状态在哪，卷就在哪**。容器是牲口不是宠物；有资格进卷的，是"丢了就不可再生"的东西——数据、消息、代码、证据。
+
+---
+
+# 第一版 compose 设计要点（待 review）
+
+- **服务名即主机名**：`minio:9000`、`thrift://metastore:9083`、`postgres:5432` 全靠 Docker 内嵌 DNS；改服务名等于同时改 spark conf、metastore 的 `DB_URI`、airflow 的连接串（这就是 V4 那题的续篇）。
+- **端口只发布 3 类**：minio 9000/9001、spark-ui 8080、airflow 8081（避开 Spark UI）；postgres 与 metastore 不发布，调试走 `docker compose exec`。
+- **一个 Postgres 两个逻辑库**：`metastore` 与 `airflow` 分开，备份/恢复互不牵连，也让"元数据 vs 数据"的边界在库级别可见。
+- **健康检查 + depends_on condition**：metastore/airflow 等 postgres healthy 再起，避免"起来了但连不上库"的假启动。
+- **Kafka 用 KRaft 单节点**：没有 ZooKeeper，少一个容器、少一处状态；代价是单点，本机开发够用。
+- **Spark 的 s3a 与 metastore uris 写在 `docker/spark/conf/spark-defaults.conf` 里**，挂载进容器；否则 Spark 根本不知道 `minio` 这个主机名对应谁。
+- **凭据走 `.env`**（已 gitignore），compose 里只保留开发默认值。
+
