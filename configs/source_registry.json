@@ -1,8 +1,10 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "notes": [
     "语料库的发布许可 ≠ 页面内容授权清洁：爬虫语料（OSCAR/CC）网页版权归原站点，这正是 DPI 审计关注点。",
-    "license_status=unknown 的源（news/pdf）在 release 阶段必须显式处置：默认排除出商用 release，或进 restricted 名单（owner 决策，写入 release 模块逻辑）。"
+    "license_status=unknown 的源（news/pdf）在 release 阶段必须显式处置：默认排除出商用 release，或进 restricted 名单（owner 决策，写入 release 模块逻辑）。",
+    "v0.3.0 修订（T5 实测定稿）：wiki 走 HF 镜像 wikimedia/wikipedia 的 20231101.zh parquet，没有 revision_id 与 namespace，source_id 改用页面 ID；text 列肉眼验 10 条为 WikiExtractor 清洗后的纯文本（残余 wiki 标记抽样命中率 ≈0.2%–1.7%），content_format 由 markdown 改为 plain_text。",
+    "registry 是适配器的唯一事实来源：适配器里不许出现 license/genre/language/content_format 的硬编码字面量。"
   ],
   "sources": {
     "oscar": {
@@ -28,12 +30,12 @@
       "commercial_use": "allowed",
       "tos_url": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
       "default_genre": "wiki",
-      "content_format": "markdown",
-      "source_id_policy": "revision_id（稳定主键）",
+      "content_format": "plain_text",
+      "language": "zh",
+      "language_source": "declared（源声明，非检测结果，故不写 language_confidence）",
+      "source_id_policy": "page_id（维基页面 ID，跨 dump 稳定的自然键；HF 镜像不含 revision_id）",
       "metadata_schema": {
-        "page_title":  "string",
-        "revision_id": "string",
-        "namespace":   "string"
+        "page_title": "string"
       }
     },
     "news": {

@@ -1,6 +1,6 @@
 # 未关账任务总清单
 
-> 更新：2026-10-28 ｜ 来源：本轮 review 汇总（按依赖顺序重排）
+> 更新：2026-10-29 ｜ 来源：本轮 review 汇总（按依赖顺序重排）
 > 图例：⬜ 未开始 · 🟨 进行中 · ✅ 关账 · 🔶 部分完成
 > 原则：**①→④ + 口试是本周硬门禁，⑥ 并行清掉，③⑤ 不再欠新账。交一批评一次，节奏不变。**
 
@@ -111,7 +111,10 @@
   - ② Metastore 为什么需要 PostgreSQL、元数据和数据的区别 ✅
   - ③ 六个容器谁要持久化卷、谁随便重启 ✅
 - [x] compose review 三必修：S3A jar 走 Dockerfile 预置、spark 凭据改环境变量、metastore 两处未知数列入 boot 检查单
-- [ ] **boot 测试**：本机 Docker daemon 未运行，检查单见 `docs/dev-lessons.md`，五项全部待验证
+- [x] **boot 测试**：本机 Docker daemon 未运行时留的检查单已执行，五项全部回填（`docs/dev-lessons.md` boot 检查单）
+- [x] **T5 `ingest/wiki.py`**（2026-10-29）：`iter_docs` 流式映射 + `hf_hub_download` 下载级幂等 + `run_stage` 处理级幂等；分片 0 = 230,792 行 / 345M 字符；`pytest` 68 绿；W1 终极验收 `SELECT source, COUNT(*) FROM raw_docs GROUP BY source` → `wiki 230792`。交付说明：`docs/ingest-wiki.md`
+- [x] **四道口试补答**（#004 两题 + #005 两题）：口头交卷（owner 要求答案不进仓库）
+- [ ] **T6**：OSCAR + 新闻适配器（`ingest/oscar.py`、`ingest/news.py`）——等 T5 跑通后再出任务书；`common/textstats.py` 的计数口径直接复用
 
 ---
 
@@ -125,12 +128,18 @@
 - ✅ ② T2 代码与测试（13 测试）+ ③ 口试三题成稿
 - ✅ ④ T1 ids.py（10 测试）+ ⑤ 口试 V1–V4 成稿
 - ✅ T3 pii.py（8 测试）、T4 idempotent.py（8 测试）、⑦ 依赖与 key registry
+- ✅ T5 wiki 适配器 + W1 终极验收（68 测试绿、230,792 行入 raw 层、外部表 `raw_docs` 可查）
 - 验收结论：口试 7/7 通过、47 测试全绿、本批次批准关账（含必修 1/2）
 
 ---
 
 ## 五、review 备忘（不阻塞，规模化前处理）
 
+- [ ] **metastore 需要 S3A 凭据 + hadoop-aws jar**（T5 验收实测）：缺凭据时 `MSCK REPAIR`、`CREATE DATABASE`（要 mkdir）、"校验已存在的表位置"全挂，Spark 静默降级成 "Spark SQL specific format"——`raw_docs` 现在就是这种表，Spark 能查、Hive/Trino 读不懂。修法：compose 给 metastore 注入 `AWS_ACCESS_KEY_ID/SECRET` + `SERVICE_OPTS` 里的 `-Dfs.s3a.*`，并确认镜像内有 `hadoop-aws`；修好后 `raw_docs` 应改成 Hive 兼容表（见 `docs/dev-lessons.md` #006 坑三）
+- [ ] **`first_seen` 台账规模**：23 万条 21.9 MB 一整块 JSON；6 分片（≈140 万条）时换 SQLite 或按 source 分桶，别等它一天扫一遍
+- [ ] **上传应进 DAG**：`mc cp` 到 `s3a://raw/docs/source=<source>/` 现在是手工两条命令，Airflow 接上后必须是一个 task（否则"raw 层有没有数据"取决于人记不记得）
+- [ ] **raw 表格式为 Spark-specific**：与上面第一条同源；短期可接受（W1 验收只要求一条 SQL），W3 前必须定：修 metastore 还是 raw 层也上 Iceberg（当前决策：raw 永远是 Parquet，不迁移）
+- [ ] **schema v0.3.2 的政策修订待 owner 复核**：`policies.content` 从"存规范化 Markdown"改为"格式由 registry 的 `content_format` 声明"——这是 wiki 实测（plain_text）逼出来的，但动了 schema 政策文本，需要一句确认
 - [ ] `changelog.append_change(dedupe=True)` 每次全文件扫描，O(n)；规模化后换内存索引（或按 doc_id 分桶）
 - [ ] `BANK_CARD_RE` 边界只挡数字不挡字母，`AB123456789012345678CD` 这类字母包裹串有概率碰巧过 Luhn；补 `(?<![0-9A-Za-z])` 前后断言
 - [ ] `runs.finish` 每次全量读日志，append-only 的已知代价；规模化换 SQLite 或内存索引

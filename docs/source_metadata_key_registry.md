@@ -18,8 +18,8 @@
 | oscar | `crawl_metadata` | object | 否 | 抓取元数据原始结构（时间、UA、状态码） | 源系统 |
 | oscar | `content_type` | string | 否 | 原始 MIME 类型 | 源系统 |
 | wiki | `page_title` | string | 是 | 页面标题（与正文首行可能重复，保真用途） | 源系统 |
-| wiki | `revision_id` | string | 是 | 修订版本号；改写 `source_id` 的键材料来源 | 源系统 |
-| wiki | `namespace` | string | 否 | MediaWiki 命名空间（0=主条目） | 源系统 |
+| wiki | `revision_id` | string | — | **deprecated（v0.3.0）**：HF 镜像 `wikimedia/wikipedia` 不含修订号，改用页面 ID 作 `source_id` | 源系统 |
+| wiki | `namespace` | string | — | **deprecated（v0.3.0）**：同上，镜像未导出命名空间；条目名空间已由 dump 预处理过滤 | 源系统 |
 | news | `publisher` | string | 否 | 发布媒体名；跨源复用 | 源系统 / meta |
 | news | `section` | string | 否 | 频道/栏目（要闻、财经…） | 源系统 |
 | pdf | `mineru_version` | string | 是 | MinerU 解析器版本；解析结果不可复现时必须能追版本 | 解析器 |

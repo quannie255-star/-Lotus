@@ -293,3 +293,77 @@ org.apache.hadoop.fs.s3a.EnvironmentVariableCredentialsProvider`。
    `DB_URI` 这类环境变量？这暴露了"官方镜像的配置契约"有什么坑？
 2. `ADD` 远程 URL 落盘的 `root:600` 权限坑，除了 `chmod`，还有哪两种更稳的写法？
    （提示：COPY 本地文件；或把下载放进 `RUN curl && chown`）
+
+---
+
+## #006 T5 ingest 四个坑：批格式、桶根、metastore 凭据、会变的时钟（2026-10-29）
+
+**触发**：写 `ingest/wiki.py` 并跑 W1 终极验收（上传 MinIO + 外部表 + `GROUP BY source`）。
+**涉及**：`ingest/wiki.py`、`common/first_seen.py`、`sql/raw_docs.sql`、`docker-compose.yml`（待改）
+
+### 坑一：`iter_batches` 默认给的不是 dict，连"迭代它"都不行
+
+**症状**（实测）：`next(pf.iter_batches(batch_size=2))` 是 `RecordBatch`；
+`batch[0]` 拿到的是**一整列**（`StringArray`），`batch[0]["text"]` 报
+`TypeError: 'str' object cannot be interpreted as an integer`；
+而 `for row in batch` 迭代出来的也不是行，是一列一列的 `StringArray`——
+**这段代码不报错也能跑，只是每一"行"其实是一列**。
+**本质**：`RecordBatch` 是列存批次（Arrow 的行列模型里它面向列），
+`to_pylist()` 才是"一批行字典"。名字都叫 batch/row，语义差一层。
+**修法**：`for row in batch.to_pylist(): ...`，并且 batch 大小显式给（`BATCH_SIZE=10_000`），
+让内存上界可推理。
+**带走**：流式 API 先问清"它给你的单位是什么"（batch / row / column）；
+更狠的一条：**如果迭代一个批次还能继续跑，说明它可能以错误粒度在跑**——
+沉默的错误比报错贵。
+
+### 坑二：Hive 不让把"桶根"当表位置
+
+**症状**：`CREATE EXTERNAL TABLE raw_docs ... LOCATION 's3a://raw/'` 报
+`InvalidObjectException: raw_docs location must not be root path`。
+**本质**：Hive 4 对表位置有合法性校验，"文件系统的根目录"被硬性拒绝（不只是"不太好"）。
+**修法**：数据放多一级前缀 `s3a://raw/docs/source=wiki/`，表 `LOCATION 's3a://raw/docs/'`；
+`source=...` 仍是目录名，分区裁剪不受影响。
+**带走**：设计目录布局时，"想怎么分层"和"引擎允许怎么分层"是两回事——
+先拿最小 DDL 试一次，再往里面灌 500MB 数据。
+
+### 坑三：metastore 没有 S3A 凭据，Spark 会**静默降级**
+
+**症状**：建表"成功"了，但日志里一行 `WARN HiveExternalCatalog: Could not persist ... in a
+Hive compatible way. Persisting it into Hive metastore in Spark SQL specific format.`
+根因是 `MetaException: got exception: AccessDeniedException s3a://raw/docs:
+NoAuthWithAWSException`；同一根因让 `MSCK REPAIR`、`CREATE DATABASE`（要 mkdir）全挂。
+**本质**：Spark 对"Hive 兼容落库失败"是**降级而不是报错**——表在 metastore 里只有
+`spark.sql.sources.*` 属性，Spark 自己能查，Hive/Trino 看到的是一张没有列的表。
+"查询能跑"因此不是通过标准，**日志里的 WARN 才是**。
+**修法**（infra，进 backlog）：给 metastore 注入 `AWS_ACCESS_KEY_ID/SECRET` + `fs.s3a.*`
+并确认镜像里有 `hadoop-aws`；raw 层临时用
+`--conf spark.sql.hive.manageFilesourcePartitions=false` 走文件系统分区发现。
+**带走**：验收要同时看"结果对不对"和"有没有降级 WARN"；降级是静默的技术债，
+它不会在 CI 里变红，只会在换引擎的那天炸。
+
+### 坑四：一个"每次运行都变"的字段，会毁掉字节级幂等
+
+**症状**：`first_seen_at = now()` 让同一批输入两次跑出的 parquet 字节不同，
+T4 承诺的"同样输入 → 同一份字节"当场失效，`force` 重跑也无法复现。
+**本质**：幂等要求"输出只由输入决定"；凡是把**运行时刻**写进产物的字段
+（`now()`、`run_id`、`hostname`），都是把不确定性放进数据。
+**修法**：`first_seen_at` 落台账（`data/meta/first_seen/wiki.json`，`doc_id → 首次时间`），
+重跑沿用旧值；`ingest_run_id` 干脆不写进数据行，归因走 runs.jsonl + manifest。
+**带走**：往数据里加任何一个字段前先问"它会不会随运行而变"；
+会变的东西放元数据/台账，别放 spine。
+
+### 一篇可以带走的自查清单
+
+1. **批格式**：流式读的 API 返回的是 batch 还是 row？切换点在哪一行？
+2. **位置合法性**：表位置/分区路径，引擎真的接受吗（先最小 DDL 试跑）？
+3. **降级 WARN**：结果对，但有没有"换个引擎就读不了"的静默降级？
+4. **会变的字段**：产物里有没有 `now()` / `run_id` / 主机名？字节还能复现吗？
+5. **估算 vs 实测**：任务书说"约 30 万行"，实测 230,792——先量再定容量。
+
+### 最后一句
+
+这一轮的四个坑分两类：**接口语义**（坑一、坑二）与**隐藏状态**（坑三、坑四）。
+接口语义的坑，代价是一次报错；隐藏状态的坑，代价是"看起来通过了"——
+metastore 凭据缺了不报错、时钟进了数据不报错，它们只在你换引擎、换机器、要求复现的那天出现。
+**验收的真正标准不是"跑通了"，是"我知道它为什么能跑通，以及它在什么条件下会悄悄不成立"。**
+

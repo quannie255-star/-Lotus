@@ -4,6 +4,10 @@ data/staging/*
 data/curated/*
 !data/*/README.md
 
+# 运行期状态（审计日志 runs.jsonl、first_seen 台账）：本地产物，不进 git
+data/meta/*
+!data/meta/README.md
+
 # Python
 __pycache__/
 *.pyc

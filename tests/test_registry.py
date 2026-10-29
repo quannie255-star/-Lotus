@@ -12,6 +12,7 @@ REQUIRED_PACKAGES = {
     "zhconv",
     "datasets",
     "huggingface_hub",
+    "pyarrow",
 }
 
 

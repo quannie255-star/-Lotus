@@ -1,16 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schema/unified_schema.v0.3.1.json",
+  "$id": "https://example.com/schema/unified_schema.v0.3.2.json",
   "title": "Unified Document Schema",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "policies": {
     "id": "doc_id = sha256(source + ':' + source_id)。(source, source_id) 已是唯一自然键，键材料越少越稳。canonical_url 不参与 doc_id 计算：URL 规范化规则版本升级不得导致 doc_id 漂移——ID 一经发布永不复算。",
     "time": "first_seen_at 为首次入库时间，重跑沿用旧值，参与幂等校验；last_seen_at 放 ingest 扩展，可更新，不参与幂等校验。",
-    "content": "脊柱 content 存规范化 Markdown；raw_uri 指向原始格式文件（HTML/PDF/WARC）；dedup/quality 在阶段内部派生纯文本，不回写。",
+    "content": "脊柱 content 的实际格式由 configs/source_registry.json 的 content_format 声明（wiki 镜像的 text 列是 WikiExtractor 清洗后的 plain_text，PDF 走 markdown 解析）；raw_uri 指向原始格式文件（HTML/PDF/WARC）；dedup/quality 在阶段内部派生纯文本，不回写。",
     "hash": "content_hash = sha256(utf8(content))，ingest 阶段对存储的 content 字符串计算，不含任何规范化，作早筛精确指纹；跨格式严格去重由 dedup 阶段版本化的 normalized_content_hash 承担。",
     "normalization": "normalized_content_hash 的规范化规则（NFC/NFKC、简繁折叠、全半角、空白）版本化到 configs/text_normalization.json；content 本身不简繁折叠。",
     "source": "source 枚举由 configs/source_registry.json 驱动；新增源不改本 schema。",
-    "source_id": "有稳定主键的源（wiki revision_id、新闻 article_id）优先用源主键；无稳定主键的源（PDF、爬虫快照）用 sha256(raw_bytes)。"
+    "source_id": "有稳定主键的源（wiki 页面 ID、新闻 article_id）优先用源主键；无稳定主键的源（PDF、爬虫快照）用 sha256(raw_bytes)。"
   },
   "$defs": {
     "unit_interval": {
