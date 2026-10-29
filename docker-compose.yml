@@ -1,1 +1,214 @@
-﻿# W1 填充
+# 语料流水线本地编排（第二版，按 review 修订）
+#
+# 几条纪律先写在最前面，代码里再逐个印证：
+# 1) 服务名就是主机名（Docker 内嵌 DNS 127.0.0.11）。spark 里写 minio:9000、
+#    metastore 里写 thrift://metastore:9083，靠的都是 service 名而不是 IP。
+# 2) 有状态的只有数据本身：postgres / minio / kafka 必须挂卷，其余容器可随时重造。
+# 3) 发布的端口只有五个，且每个都有人用：
+#      9000  MinIO S3 API（宿主机上的 spark driver / aws cli 要用）
+#      9001  MinIO 控制台（排障看 bucket）
+#      7077  Spark 集群入口（宿主机提交用；纯容器内提交可删）
+#      8080  Spark Master UI
+#      8081  Airflow Web（避开 Spark 的 8080）
+#    postgres / metastore / kafka 都不发布：它们的消费方都在 compose 网络内。
+# 4) 凭据一律走环境变量：compose 从 .env 读，密码**没有默认值**，缺失直接报错；
+#    spark-defaults.conf 里一个密钥都不留，由 AWS_ACCESS_KEY_ID/SECRET 注入。
+
+name: corpus-pipeline
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ---------------------------------------------------------------- 元数据存储
+  # 唯一真源：Hive Metastore 的库表定义 + Airflow 的调度元数据。
+  # 分开两个逻辑库（metastore / airflow），互不污染，备份也可以分别做。
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pipeline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?missing in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-metastore}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging: *default-logging
+
+  # ------------------------------------------------------------------ 对象存储
+  # 数据本体：warehouse（Parquet/ORC）、raw（原始 PDF/HTML）、staging。
+  # 注意：minio/minio 官方镜像已从 Docker Hub 整仓撤柜（2025-04 起旧 tag 全部消失，
+  # 镜像源报"官方仓库可能已删除"）。改用 Bitnami legacy 目录的同源 MinIO：
+  # - 环境变量兼容（MINIO_ROOT_USER/PASSWORD），但数据目录在 /bitnami/data/minio；
+  # - 不需要自定义 command（Bitnami 入口自带 server+console）；
+  # - MINIO_DEFAULT_BUCKETS 在首启时自动建桶，省掉手工 mc 建桶步骤。
+  minio:
+    image: bitnamilegacy/minio:2025.5.24
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?missing in .env}
+      MINIO_DEFAULT_BUCKETS: "warehouse,logs"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/bitnami/data/minio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  # ------------------------------------------------------------ Metastore 服务
+  # 无状态服务：库表目录存在 postgres，文件存在 minio，容器本身挂了重造即可。
+  # WAREHOUSE_DIR 用 s3a://，所以 Spark/Hive 侧必须同时配好 s3a endpoint。
+  #
+  # boot 必查（见 docs/dev-lessons.md）：镜像是否自带 PostgreSQL JDBC 驱动、
+  # schema 是否自动初始化。若日志报 "No suitable driver"，把 postgresql-42.x.jar
+  # 放进 docker/metastore/ 后解除下面这行注释：
+  #   - ./docker/metastore/postgresql-42.7.4.jar:/opt/hive/lib/postgresql.jar:ro
+  #   ↑ 2026-10-29 已验证：镜像确实不带 PG 驱动（ClassNotFoundException: org.postgresql.Driver），
+  #     该 jar 已下载到 docker/metastore/，挂载行见下（不再是注释）。
+  metastore:
+    image: apache/hive:4.0.0
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: metastore
+      # 教训（dev-lessons #002 检查单）：这个镜像不认 DB_URI/DB_USER 这类"直觉"变量，
+      # JDBC 连接必须走 SERVICE_OPTS 里的 javax.jdo.option.* 系统属性。
+      # 否则 schematool 会拿默认 Derby 连接去跑 postgres 脚本，
+      # 报 "Syntax error: Encountered statement_timeout"（PG 语法撞 Derby 引擎）。
+      DB_DRIVER: postgres
+      SERVICE_OPTS: >-
+        -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver
+        -Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres:5432/metastore
+        -Djavax.jdo.option.ConnectionUserName=${POSTGRES_USER:-pipeline}
+        -Djavax.jdo.option.ConnectionPassword=${POSTGRES_PASSWORD:?missing in .env}
+        -Dfs.s3a.endpoint=http://minio:9000
+        -Dfs.s3a.path.style.access=true
+        -Dfs.s3a.connection.ssl.enabled=false
+        -Dfs.s3a.access.key=${MINIO_ROOT_USER:-minioadmin}
+        -Dfs.s3a.secret.key=${MINIO_ROOT_PASSWORD:?missing in .env}
+      WAREHOUSE_DIR: s3a://warehouse/
+    volumes:
+      - ./docker/metastore/postgresql-42.7.4.jar:/opt/hive/lib/postgresql.jar:ro
+      # metastore 建库/表时要 mkdir s3a://warehouse/...，它自己的 Hadoop 是 3.3.6
+      # （与 Spark 的 3.3.4 不同，jar 各对各的），同样缺 hadoop-aws + sdk bundle。
+      - ./docker/metastore/hadoop-aws-3.3.6.jar:/opt/hadoop/share/hadoop/common/lib/hadoop-aws-3.3.6.jar:ro
+      - ./docker/metastore/aws-java-sdk-bundle-1.12.367.jar:/opt/hadoop/share/hadoop/common/lib/aws-java-sdk-bundle-1.12.367.jar:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  # ------------------------------------------------------------------- Spark
+  # 无状态：master/worker 挂了重启即可；正在跑的 job 靠 T4 的幂等重跑。
+  # 镜像基于官方 apache/spark:3.5.3，再补 S3A 需要的两个 jar（hadoop-aws + aws sdk bundle），
+  # 否则第一次碰 s3a:// 就是 ClassNotFoundException: S3AFileSystem。
+  spark-master:
+    build:
+      context: ./docker/spark
+      dockerfile: Dockerfile
+    image: corpus/spark:3.5.3-s3a
+    restart: unless-stopped
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master"]
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?missing in .env}
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    volumes:
+      - ./docker/spark/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+    depends_on:
+      minio:
+        condition: service_started
+    logging: *default-logging
+
+  spark-worker:
+    build:
+      context: ./docker/spark
+      dockerfile: Dockerfile
+    image: corpus/spark:3.5.3-s3a
+    restart: unless-stopped
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?missing in .env}
+    volumes:
+      - ./docker/spark/conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+    depends_on:
+      spark-master:
+        condition: service_started
+    logging: *default-logging
+
+  # ------------------------------------------------------------------ Airflow
+  # 容器无状态（调度元数据在 postgres 的 airflow 库），但 DAG 代码与日志要挂卷：
+  # DAG 是"代码"，丢了等于流水线没了；日志是排障证据，重启清空等于自断线索。
+  # standalone 是官方开发模式（web + scheduler + triggerer），生产要拆开。
+  airflow:
+    image: apache/airflow:2.10.4
+    restart: unless-stopped
+    command: bash -c "airflow db migrate && airflow standalone"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-pipeline}:${POSTGRES_PASSWORD:?missing in .env}@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  # -------------------------------------------------------------------- Kafka
+  # 消息日志就是状态：topic 里未消费的数据随容器一起没，所以必须挂卷。
+  # KRaft 单节点（无 ZooKeeper），少一个容器、少一处状态。
+  # 不发布 9092：唯一的消费方 stream 模块跑在 compose 网络内，用 kafka:9092 就够了。
+  # 若以后要宿主机客户端消费，再加一个 listener 并真正广播宿主可解析的地址（localhost:29092），
+  # 否则发布的端口只是摆设——客户端拿到 metadata 后照样连 kafka:9092 解析不到。
+  kafka:
+    # bitnami 主目录老版本已下架（Bitnami 目录迁移），bitnamilegacy 是其冻结副本：
+    # KAFKA_CFG_* 环境变量与 /bitnami/kafka 卷路径完全兼容，配置无需改动。
+    image: bitnamilegacy/kafka:3.7.1
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    logging: *default-logging
+
+volumes:
+  pgdata:        # metastore + airflow 元数据
+  minio_data:    # 数据本体
+  kafka_data:    # 消息日志
+  airflow_logs:  # 排障证据
+
+networks:
+  default:
+    name: corpus-net

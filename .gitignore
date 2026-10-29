@@ -18,3 +18,7 @@ venv/
 # 系统 / 编辑器
 .DS_Store
 Thumbs.db
+
+# 大体积二进制依赖（JDBC 驱动 / Hadoop AWS 相关 jar）：不入库
+# 获取方式见 docker/metastore/README.md，boot 前需手工下载一次
+docker/**/*.jar
