@@ -94,38 +94,9 @@ LEDGER_PATH = ROOT / "data" / "meta" / "first_seen" / f"{SOURCE}.json"
 # 源列 → 必需列清单。少一列就直接炸：宁可停工，也不产出悄悄缺字段的 spine 行。
 REQUIRED_COLUMNS = ("id", "url", "title", "text")
 
-# 产物 schema：显式声明而不是让 pyarrow 从第一批数据猜——否则某一批全空字段会改 schema，
-# 同一批输入跑出两种文件。顺序 = unified_schema.spine 的顺序（未检测的字段不出现）。
-PARQUET_SCHEMA = pa.schema(
-    [
-        pa.field("doc_id", pa.string(), nullable=False),
-        pa.field("schema_version", pa.string(), nullable=False),
-        pa.field("source", pa.string(), nullable=False),
-        pa.field("source_id", pa.string(), nullable=False),
-        pa.field("url", pa.string()),
-        pa.field("canonical_url", pa.string()),
-        pa.field("content_hash", pa.string(), nullable=False),
-        pa.field("content", pa.string(), nullable=False),
-        pa.field("content_format", pa.string(), nullable=False),
-        pa.field("raw_uri", pa.string()),
-        pa.field("original_encoding", pa.string()),
-        pa.field("language", pa.string(), nullable=False),
-        pa.field("char_count", pa.int64(), nullable=False),
-        pa.field("cjk_char_count", pa.int64(), nullable=False),
-        pa.field("utf8_byte_count", pa.int64(), nullable=False),
-        pa.field("source_timestamp", pa.string()),
-        pa.field("timestamp_source", pa.string(), nullable=False),
-        pa.field("first_seen_at", pa.string(), nullable=False),
-        pa.field("genre", pa.string(), nullable=False),
-        pa.field("license", pa.string(), nullable=False),
-        pa.field("license_status", pa.string(), nullable=False),
-        pa.field("commercial_use", pa.string(), nullable=False),
-        pa.field(
-            "source_metadata",
-            pa.struct([pa.field("page_title", pa.string())]),
-        ),
-    ]
-)
+# 产物 schema：家族契约抽到 ingest/spine_schema.py（第二个适配器出现后它不再属于 wiki）。
+# 显式声明而不是让 pyarrow 从第一批数据猜——否则某一批全空字段会改 schema。
+from ingest.spine_schema import SPINE_PARQUET_SCHEMA as PARQUET_SCHEMA  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

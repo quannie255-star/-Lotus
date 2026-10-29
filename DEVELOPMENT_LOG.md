@@ -5,7 +5,62 @@
 
 ---
 
-## M1 — 骨架 + wiki 全链路（2026-10-26 ~ 10-30）
+## M2 — OSCAR 适配器（mock 骨架，真实数据待 N1）（2026-10-30）
+
+**日期**：2026-10-30。**里程碑**：M2。
+**目标**：OSCAR 源接入骨架全通——确定性抽样、quarantine 一等公民、坏行护栏、双层幂等；
+真实取数被 N1 阻塞（FlClash 未开，OSCAR meta/content 结构未实测），按里程碑规则 mock 先行。
+
+### 实际做了什么
+
+- `ingest/spine_schema.py`：spine 产物 schema 从 wiki 私有常量升级为家族契约（wiki.py 改为
+  import 别名，测试零改动）；
+- `ingest/sampling.py`：`sample_shards`（sha256(seed:shard) 排序取前 k，与输入顺序无关）+
+  `write_sample_manifest`（抽样决策落盘为字节稳定快照，进 git = 可复现）；
+- `ingest/oscar.py`：`write_mock_shards`（确定性 mock 源，坏行为 3 类配方）→ `classify_row`
+  （N1 后唯一需要重写的接缝：一行 → ok-spine | quarantine 记录）→ `_write_shard`（护栏判定 +
+  双产物 part/quarantine parquet）→ `run()`（run_stage 幂等，quarantine 产物也进 output_hashes
+  参与验货）；策略阈值全部读 `configs/ingest_policy.json`；
+- `tests/test_ingest_oscar.py`：12 个测试。
+
+### 关键决策及理由
+
+- **M2-D1 spine schema 家族化**：第二个适配器出现，产物 schema 收敛到共享文件；
+  改它 = 改全家族产物 → 必须 schema_version 递增 + 全链 force。
+- **M2-D2 抽样 = 快照 = 指纹**：确定性整群抽样 + manifest 落盘，manifest 并入 run_stage
+  输入指纹，幂等白拿；整群偏差记为 W4 实验局限（blueprint E1 注）。
+- **M2-D3 身份策略（N1 前的假设）**：warp_record_id 为 source_id（registry 声明），
+  同页两次爬取 = 两条 raw 记录（爬取事实保留），内容折叠交给 M5 dedup；缺身份 → quarantine
+  而非发明 ID。
+- **M2-D4 坏行双策略（宪法第 7 条的显式豁免）**：wiki 干净源缺主键 fail-fast；oscar 脏源
+  行级异常 quarantine + 5% 分片护栏（区分毒丸行与源结构漂移）。策略差异入 config 不入代码。
+
+### 遇到的问题及解决
+
+- 首版 `classify_row` 把「非字符串 content」和「空 content」合并成一个条件，测试
+  `row2-bad_content_type` 当场逮住（reason 误报 empty_content）——拆成两个分支修复。
+  这是「测试先红」流程的又一次兑现。
+
+### 怎么验证的
+
+```
+$ python -m pytest -q
+80 passed in 2.57s     （68 → 80，新增 12）
+$ python -m ingest.oscar
+{"cached": false, "rows": 192, "quarantined": 8, ...}   （mock 4×50, bad_ratio 0.04）
+```
+
+### 微调入口
+
+MANUAL 反查表新增：OSCAR 护栏阈值/语言默认（configs/ingest_policy.json）、抽样 seed/k
+（同文件 sample 节）、mock 源目录（ingest/oscar.py MOCK_DIR）。
+
+### 遗留问题
+
+1. **N1 未关**（FlClash）：真实 OSCAR meta 行结构、正文获取路径、language 字段可信度
+   三件事实测后重写 download() 与校准 classify_row；
+2. run() 的 mock_dir 注入用了全局变量临时交换——能用但丑，M4 stage 化时随契约重构；
+3. oscar 上传 MinIO（source=oscar 分区）待真实数据到位后进 smoke。
 
 **日期**：2026-10-26 起，10-30 收口（smoke PASS）。
 **里程碑**：M1（对应蓝图 §5 的 W1 段：环境、契约、wiki 源、验收）。

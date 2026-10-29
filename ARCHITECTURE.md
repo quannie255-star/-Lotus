@@ -51,6 +51,8 @@ SELECT source, COUNT(*) FROM raw_docs GROUP BY source;   ← W1 验收（wiki=23
 | `common/textstats.py` | str | 三计数 | `text_stats` `cjk_char_count` |
 | `common/log.py` | LOG_LEVEL | stderr 日志 | `setup` `get_logger` |
 | `ingest/wiki.py` | HF 分片 parquet | spine parquet | `download` `iter_docs` `map_row` `run` |
+| `ingest/oscar.py` | mock jsonl（N1 后换真实源） | spine parquet + quarantine parquet | `write_mock_shards` `classify_row` `run`（护栏 0.05） |
+| `ingest/sampling.py` | 分片清单 | 确定性抽样 + manifest 快照 | `sample_shards` `write_sample_manifest` |
 | `clean/pii.py` | 文本 | 命中/脱敏 | `detect` `redact`（GB11643 + Luhn 校验） |
 | `sql/raw_docs.sql` | — | 外部表 DDL + 验收查询 | — |
 | `smoke/m1.py` | — | 五步 PASS/FAIL | — |

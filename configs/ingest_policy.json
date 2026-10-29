@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "status": "ingest 阶段策略。改任何阈值 = 改产物内容，下游需要 force 重算（M4 配置指纹落地前手动）。",
+  "oscar": {
+    "bad_row_guardrail": 0.05,
+    "bad_row_guardrail_note": "单分片坏行率护栏：超过则整片 fail-fast（区分毒丸行与源结构漂移），阈值 W3 后按实测调",
+    "language_default": "zh",
+    "language_source": "row.language 若缺失用默认值；真实 OSCAR 行自带语言判定，N1 实测后校准其可信度",
+    "identity": "warc_record_id（registry 声明）；缺失 = quarantine，不发明身份",
+    "mock_note": "download() 当前产出 mock 分片（N1 阻塞：FlClash 未开、OSCAR meta/content 结构未实测）。实测后替换为 hf_hub_download + meta/content 拼装，映射函数隔离在 classify_row 一处"
+  },
+  "sample": {
+    "seed": 42,
+    "k": 2,
+    "note": "确定性整群抽样：seed+k 进 git 即可复现；manifest 见 data/meta/samples/"
+  }
+}

@@ -18,6 +18,9 @@
 | **输出路径（MinIO/表）** | 上传命令里的目标前缀 + `sql/raw_docs.sql` 的 `LOCATION` | `s3a://raw/docs/` | 外部表位置 | 重跑 S5（DROP/CREATE 自动） |
 | **日志级别** | 环境变量 `LOG_LEVEL`（`common/log.py` 消费） | `INFO` | 全部入口的 stderr 日志量 | 无需重跑，即时生效：`LOG_LEVEL=DEBUG python -m ingest.wiki` |
 | 文本规范化规则 | `configs/text_normalization.json`（改任意规则**必须**递增 `version`） | v1.0.0（NFKC+t2s 折叠等，见 decisions 节） | normalized_content_hash 口径 = 去重判定 | M5 起生效；改规则 → dedup 及下游 force |
+| OSCAR 坏行护栏/语言默认 | `configs/ingest_policy.json` 的 `oscar` 节 | 护栏 0.05；语言默认 zh | oscar 的 quarantine 率与 fail-fast 阈值 | `python -m ingest.oscar --force` |
+| 抽样种子/份数 | `configs/ingest_policy.json` 的 `sample` 节 | seed=42, k=2 | 大源首跑样本构成 | 重跑 ingest；manifest 落 data/meta/samples/ |
+| OSCAR mock 源 | `ingest/oscar.py` 的 `MOCK_DIR`/`write_mock_shards` | data/mock/oscar，4×50 行 | mock 数据形态 | N1 实测后整个 mock 节删除 |
 | wiki 的 license/genre 等声明 | `configs/source_registry.json` 的 `sources.wiki` | CC BY-SA 4.0 / wiki | 新 ingest 的行；旧行不追溯 | force 重跑 ingest（golden record 测试会同步要求更新） |
 | 单条记录的 schema 字段 | `schema/unified_schema.json`（spine/stage_extensions）+ `ingest/wiki.py` 的 `PARQUET_SCHEMA` + golden 测试 `tests/test_ingest_wiki.py` | v0.3.2 | 全管道契约 | schema_version 递增 + 全链路重算 |
 | 容器栈（服务/端口/凭据） | `docker-compose.yml`；凭据 `.env`（不进 git） | 7 服务 | 基础设施层 | `docker compose up -d` 重建受影响服务 |
