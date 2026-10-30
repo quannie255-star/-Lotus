@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "status": "dedup 阶段策略。改参数=改产物，配置已进指纹会自动重算。W4 将对 num_perm×bands×threshold 做网格实验(E1)后回填。",
+  "shingle": {"unit": "char", "n": 3, "note": "中文 3 字符 shingle（word 分词对无空格中文不稳，char 是稳健起点）"},
+  "minhash": {"num_perm": 128},
+  "lsh": {"bands": 16, "note": "threshold 由 bands 与 num_perm 隐式决定 ≈ (1/bands)^(1/(num_perm/bands)) ≈ 0.74；候选对再算真实 Jaccard 过 verify_threshold"},
+  "verify_threshold": 0.8,
+  "canonical_policy": {
+    "source_trust": ["wiki", "news", "pdf", "oscar"],
+    "tiebreak": ["content_length_desc", "doc_id_asc"],
+    "note": "簇内代表选择：源可信度优先（wiki 干净源可信），同信任级取内容更长者，再平取 doc_id 字典序（确定性铁律）"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": "0.1.0",
+  "status": "quality 阶段策略：五维打分+门禁。分数全部 0~1，越高越好。W6 后按 E3 扫描回填阈值。",
+  "weights": {
+    "completeness": 0.25, "uniqueness": 0.20, "consistency": 0.20,
+    "non_pollution": 0.25, "length": 0.10
+  },
+  "dims": {
+    "completeness": {"min_ending_punct_ratio": 0.3, "note": "段落末尾有标点的比例——截断文特征是大量无标点结尾"},
+    "uniqueness": {"note": "消费 dedup 签名最近邻 Jaccard：1-sim 映射（签名表由 dedup 产出，跨阶段复用）"},
+    "consistency": {"max_fffd_per_kchar": 2.0, "note": "残留替换符密度（clean 已删重灾户，这里是分数不是门禁）"},
+    "non_pollution": {"n": 13, "benchmark_files": ["data/benchmarks/ceval.jsonl"], "note": "评测集 n-gram 命中密度映射；benchmark 未就绪时该维=1.0 并标记 skipped"},
+    "length": {"genre_target_chars": {"wiki": [200, 50000], "news": [150, 20000], "default": [100, 100000]}, "note": "体裁长度带内=1.0，对数距离衰减"}
+  },
+  "gate": {
+    "min_total_score": 0.55,
+    "min_dim_score": 0.30,
+    "quarantine_band": [0.45, 0.55],
+    "note": "总分<0.45 删除（low_quality）；0.45~0.55 隔离（quarantine_borderline）；≥0.55 放行；任一维<0.30 也删除"
+  },
+  "judge": {"status": "M6 未实装（砍单顺序第 2 位）——规则五维先扛，蒸馏分类器 W6 视进度决定"}
+}
