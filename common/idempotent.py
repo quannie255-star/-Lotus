@@ -60,15 +60,17 @@ def _write_manifest(manifest, manifest_path):
 
 
 def _outputs_intact(final_dir, expected_hashes):
-    """验货：产物目录里的文件必须和 manifest 记录的哈希逐个对上。
+    """验货：产物必须和 manifest 记录的哈希逐个对上。
 
     只有"输入指纹相同"是不够的——中间可能有人手改了产物、或半截写入，
     那样命中缓存等于把脏数据当成合格产物发出去。
+    manifest 键是**相对路径**（M4 修：clean 起产物带 source= 子目录，扁平文件名
+    会同名碰撞且哈希路径错位 → 永不命中缓存；合同测试 T1 逮住）。
     """
     if not expected_hashes:
         return False
-    for name, expected in expected_hashes.items():
-        path = Path(final_dir) / name
+    for rel, expected in expected_hashes.items():
+        path = Path(final_dir) / rel
         if not path.is_file() or _sha256_file(path) != expected:
             return False
     return True
@@ -135,9 +137,12 @@ def _execute(stage, transform, input_paths, output_dir, run_id, force):
         shutil.rmtree(final_dir)
     work_dir.rename(final_dir)
 
-    output_hashes = {
-        p.name: _sha256_file(final_dir / p.name) for p in outputs if (final_dir / p.name).exists()
-    }
+    # 产物键 = 相对 work_dir 的路径（支持子目录布局；wiki 等扁平产物相对路径 == 文件名，向后兼容）
+    output_hashes = {}
+    for p in outputs:
+        rel = p.relative_to(work_dir)
+        if (final_dir / rel).is_file():
+            output_hashes[str(rel).replace("\\", "/")] = _sha256_file(final_dir / rel)
 
     manifest[stage] = {"input_fingerprint": input_fp, "output_hashes": output_hashes}
     _write_manifest(manifest, manifest_path)

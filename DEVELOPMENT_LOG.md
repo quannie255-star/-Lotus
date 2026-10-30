@@ -5,6 +5,79 @@
 
 ---
 
+## M4 — clean 框架 + WP-01 六件套（2026-10-30）
+
+**目标**：clean 阶段真数据跑通；配置进指纹；changelog 两段式；合同测试。
+
+### 实际做了什么
+
+- `common/stage.py`（WP-01 六件套实装）：`configs_digest` / `snapshot_configs`（配置快照=指纹锚+
+  provenance 双用途）/ `latest_outputs`（上游验货：manifest∧逐文件哈希）/ `StagedChangeLog`
+  （part 暂存→成功 commit（dedupe 吸收重试）/失败 discard）/ `run_pipeline` 薄驱动；
+- `clean/base.py`：规则框架（判定协议 keep/drop/transform+meta；规则=配置装配的纯函数；
+  变更走 StagedChangeLog；stats 侧信道=看板数据源）；
+- `clean/rules.py` 六规则：too_short / lang_ratio（v1=Han 占比确定性检测器，N4 fasttext 位）/
+  mojibake（U+FFFD 密度）/ boilerplate（链接密度+短行占比）/ pii_redact（掩码保长，meta 带
+  old/new hash+pii_types）/ url_norm（canonical_url 回填，M4-D3 显式豁免不记 changelog）；
+- `clean/run.py`：家族入口——latest_outputs 验货四源 raw → 规则链 → 按源写
+  `data/clean/source={s}/part-00000.parquet` → run_stage 幂等；
+- `configs/clean_policy.json`（全部阈值+note）；`tests/test_clean.py` 16 测试
+  （六件套单测 + 规则族边界 + 合同 T1-T4）。
+
+### 关键决策
+
+- **M4-D1 配置进指纹**：snapshot 并入 input_paths——修掉 M1 遗留「改配置不重算」；T3 合同测试锁定；
+- **M4-D2 规则是数据**：加规则=clean_policy 加一条+纯函数，无代码分支改动；
+- **M4-D3 url_norm 豁免记录**：canonical_url 是派生字段回填非内容变更，不进 changelog
+  （否则全量行都有一条 transform 记录，账本被噪音淹没）；redact 必记（内容变了）；
+- **M4-D4 产物哈希键改相对路径**（框架级修复，见下）。
+
+### 遇到的问题及解决（今天框架级 bug 密度最高）
+
+1. **产物哈希扁平键碰撞**（合同 T1 逮住）：output_hashes 按文件名做键，clean 的
+   `source=wiki/part-00000.parquet` 与 `source=oscar/part-00000.parquet` 同名碰撞且哈希路径
+   错位 → 永不命中缓存。修复：键=相对 work_dir 路径（M4-D4，扁平产物向后兼容）；
+2. **测试状态泄漏**（单跑过、全套挂）：StagedChangeLog 全局默认路径指向仓库真实 changelog，
+   与并发真实运行互踩计数。修复：fixture 隔离 monkeypatch CHANGELOG_PATH——「测试必须连账本一起隔离」；
+3. **run_id 占位污染**：记录带 "pending" run_id，commit 的 setdefault 不覆盖 → 永久占位身份。
+   修复：StagedChangeLog 构造于 transform 内（此刻才有真 run_id），行内零占位；
+4. **掩码保长语义**：断言 after<before 错——掩码策略刻意保长（3+4 可见+星号），正确断言=
+   长度不变、hash 必变；
+5. 测试算术错误两处（「短」行被 boilerplate 补刀：单行短文短行占比 100%）——期望值修正；
+6. **性能画像**：230k 行/600MB 真实数据全程 ~11 分钟，瓶颈=每记录一次 jsonschema 校验 +
+  每记录一次文件开关（14k 条变更记录）。缓冲句柄+批量校验列 backlog（OSCAR 规模前必修）。
+
+### 怎么验证的（实跑）
+
+```
+$ python -m pytest -q
+104 passed in 8.01s               （88 → 104）
+
+$ python -m clean.run（首跑，旧代码进程/新 manifest 差异见问题 1）
+{"cached": false, "rows": 216738, "changelog_added": 14362, sources: [news,oscar,pdf,wiki]}
+
+$ python -m clean.run（三跑）
+{"cached": true, "rows": null}    ← 幂等闭环（二跑重算系旧 manifest 键制，三起新键即中）
+
+$ 账目对平：wiki 230792 − 14280 删 = 216512 + oscar 195 + news 30 + pdf 1 = 216738 ✓
+$ 真实删除归因（changelog 聚合）：
+  wiki boilerplate_heavy 8609 | lang_mismatch 3771 | too_short 1900 | pii_redacted 82
+  （项目首批真实治理数字：删除率 6.1%，PII 命中 82 条）
+```
+
+### 微调入口
+
+MANUAL 新增：清洗规则阈值（clean_policy.json 各节）、规则顺序（rules_order）、
+语言检测阈值（N4 升级位注释）。
+
+### 遗留问题
+
+1. clean 性能（见问题 6）；2. 重算时 changelog 净增 4 条（dedupe 键未覆盖的边角，待查）；
+3. 存量 docstring 四段标准 retrofit 仍未做（ids/runs/changelog/first_seen）；
+4. wiki 82 条 PII 样本值得人工抽检（误报率估计）。
+
+---
+
 ## M3 — news + pdf 源（2026-10-30）
 
 **日期**：2026-10-30。**里程碑**：M3。

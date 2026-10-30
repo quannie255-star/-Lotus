@@ -56,6 +56,9 @@ SELECT source, COUNT(*) FROM raw_docs GROUP BY source;   ← W1 验收（wiki=23
 | `ingest/pdf.py` | 源清单（URL/本地 PDF） | spine parquet + 归档件 + quarantine | `fetch_bytes` `archive_raw` `run` |
 | `ingest/news.py` | 本地 jsonl（N2 后换真实语料） | spine parquet | `iter_docs` `run`（fail-fast 策略） |
 | `parse/pdf_extractor.py` | PDF 文件 | ExtractResult(text/pages/warnings) | `extract_pdf`（PyMuPDF 文本层） |
+| `common/stage.py` | 配置/上游目录/变更记录 | 指纹·快照·验货·两段式账本 | `configs_digest` `snapshot_configs` `latest_outputs` `StagedChangeLog` `run_pipeline` |
+| `clean/base.py`+`rules.py` | spine 行流 | 保留行流 + stats + 变更记录 | `apply_rules` `iter_clean`（六规则，阈值全在 clean_policy） |
+| `clean/run.py` | data/raw/{src}/ingest | data/clean/source={s}/part-*.parquet + changelog | `run`（四源聚合，验货上游） |
 | `clean/pii.py` | 文本 | 命中/脱敏 | `detect` `redact`（GB11643 + Luhn 校验） |
 | `sql/raw_docs.sql` | — | 外部表 DDL + 验收查询 | — |
 | `smoke/m1.py` | — | 五步 PASS/FAIL | — |

@@ -1,0 +1,11 @@
+{
+  "clean": {
+    "input_fingerprint": "73f7a9033728beb10b2e8c4b4ed0930727be81d2a22d2d548626a3c47b888cac",
+    "output_hashes": {
+      "source=news/part-00000.parquet": "71ded786cfd2b8989f7146e4267be17e9673d38b532be0fa393e38c95626a75f",
+      "source=oscar/part-00000.parquet": "201f6e0b5c7c72b7b204340ea578a2bcf9c8f9506849a9643d9a1c5a84008dca",
+      "source=pdf/part-00000.parquet": "0a9cc0bf8544859eeeecdc128163a07eac7d7ecae85ab91e1afd6fd8ca2d6ad8",
+      "source=wiki/part-00000.parquet": "8c098fff8a7d5e272d9e5ec4677a1d583e8b2c05dca3e32e565ae83f21c913b6"
+    }
+  }
+}
