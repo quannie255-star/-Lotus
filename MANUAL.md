@@ -11,9 +11,9 @@
 | **数据源（加一个源）** | `configs/source_registry.json`（登记 license/genre/format/id 策略）+ 新建 `ingest/<source>.py` 适配器（照 `ingest/wiki.py` 形状）+ `docs/source_metadata_key_registry.md`（登记 map 键） | 4 源已登记（wiki/oscar/news/pdf），适配器实装 1 个 | 新增源；已有源不受影响 | 新适配器自己的 ingest；下游全链路（新源汇入） |
 | 换 wiki 的 dump 日期/分片数 | `ingest/wiki.py` 顶部 `DUMP_DATE` / `N_SHARDS` / `SHARD_FILENAME` | 20231101 / 6 | doc 的 source_timestamp 与数据量 | `python -m ingest.wiki --force 不存在时删 data/raw/wiki/` → 重新上传 MinIO → S5 |
 | **清洗规则**（增删改/阈值） | `configs/clean_policy.json`（各规则节）+ `clean/rules.py`（纯函数）+ reason 码登记 `configs/reason_registry.json`；顺序改 `rules_order` | min_cjk=10 / han_ratio=0.25 / fffd≤2‰ / 链接≤0.30 / 短行≤0.80 | clean 及全部下游 | `python -m clean.run --force`（M4 起配置已进指纹，**无需 --force 也会重算**） |
-| **去重阈值** | M5 落地：`configs/dedup_policy.json`（num_perm/bands/threshold/shingle） | 尚未实装（M5） | dedup 层及下游 | M5 起生效 |
-| **质量门禁阈值** | M6 落地：`configs/quality_weights.json` + 门禁阈值 | 尚未实装（M6） | quality/mix/release | M6 起生效 |
-| **抽样比例/配比** | M7 落地：`configs/mix_policy.json`（strata/ratios/token_budget/seed） | 尚未实装（M7） | mix 输出 | M7 起生效 |
+| **去重阈值** | `configs/dedup_policy.json` | num_perm=128 / bands=16 / verify=0.8 / char 3-gram | dedup 层及下游 | 改后重跑 dedup 即自动重算（配置进指纹）；W4 网格实验回填 |
+| **质量门禁阈值** | `configs/quality_policy.json`（weights/dims/gate 三节） | min_total=0.55 / 隔离带 0.45-0.55 / 维度下限 0.30 | quality/mix/release | 重跑 quality 即重算 |
+| **抽样比例/配比** | `configs/mix_policy.json` | 预算 2M token / wiki .6 news .2 oscar .15 pdf .05 / seed 42 | mix 输出构成 | 重跑 mix；改 tokenizer 需 force |
 | **输出路径（本地产物）** | `ingest/wiki.py` 的 `OUTPUT_DIR`（L91） | `data/raw/wiki/` | 该阶段产物位置；MinIO 上传目标同步改 | 仅影响新跑；已有产物不迁移 |
 | **输出路径（MinIO/表）** | 上传命令里的目标前缀 + `sql/raw_docs.sql` 的 `LOCATION` | `s3a://raw/docs/` | 外部表位置 | 重跑 S5（DROP/CREATE 自动） |
 | **日志级别** | 环境变量 `LOG_LEVEL`（`common/log.py` 消费） | `INFO` | 全部入口的 stderr 日志量 | 无需重跑，即时生效：`LOG_LEVEL=DEBUG python -m ingest.wiki` |

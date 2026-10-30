@@ -5,6 +5,62 @@
 
 ---
 
+## M5-M10 — 主链全模块（2026-10-30，代码全绿；真实链路跑通于 dedup 完成后补录）
+
+**状态**：六个里程碑代码+测试一次交付（commit f3fd783，124 测试全绿）；真实数据链路
+（quality→mix→release→downstream）阻塞在 dedup 真实跑（216k 行纯 Python MinHash，
+E2 素材：单机纯 py 的耗时基线）。本条目按里程碑分小节，真实数字补录于各节「实跑」。
+
+### M5 — dedup（exact + MinHash + 跨源矩阵）
+- `dedup/engine.py`：`shingles/minhash_signature/UnionFind/dedup_pass`（两级：规范化哈希
+  精确 → LSH 候选+真实 Jaccard 复核+并查集成簇；canonical=源信任→内容长→doc_id）；
+  `dedup/run.py`：阶段入口（签名表/报告/changelog 三产物）；`configs/dedup_policy.json`。
+- 教训：keep/kept 变量名手滑导致全量误删（首测逮住）；JSON 不认 Python 下划线数字。
+- 实跑：⚠️ 后台进行中（耗时即 E2 单机基线数据），完成号补录。
+
+### M6 — quality（五维 + 门禁 + 污染）
+- `quality/engine.py`：五维纯函数（completeness=段尾标点率 / uniqueness=1−最近邻 /
+  consistency=FFFD 密度 / non_pollution=n-gram 命中 / length=体裁带）+ `gate` 三分 +
+  `build_ngram_index`；`quality/run.py`：阶段入口（benchmark 缺失=显式 skipped 不假检测）；
+  `configs/quality_policy.json`（权重+阈值+隔离带）。
+- 变异测试（纪律 2）：截断文/超短文必须被拦，好文必须放行——`test_gate_variants_mutation_matrix`。
+- judge/蒸馏按砍单序 2 未实装（policy 有 status 记录）。
+
+### M7 — mix + release
+- `mix/run.py`：`token_count_estimate`（char-estimate-v1，Qwen 升级位）+ `stratified_sample`
+  （层=source，质量降序贪心取满 token 目标，允许超额；枯竭单轮再分配；全程无随机数）；
+- `release/run.py`：`next_version`（semver 三档）+ license 执法（unknown/restricted 剔除
+  并记 changelog）+ `build_provenance_card`（DPI 风格 YAML，逐源 license 表+删除统计）。
+
+### M8 — downstream ppl（唯一核心指标）
+- `downstream/ppl.py`：`CharNgramLM`（5-gram add-k，纯 Python——N7 决策：kenlm 需 MSVC）+
+  `bootstrap_ci`（重采样 95% CI）；`downstream/run.py`：四臂协议（raw/clean/dedup/release
+  各训一个 LM，同一冻结评测集比 ppl——防「不同分布直接比」的经典混淆）。
+- 文档化性质：LM 计数可加性仅在切点对齐时精确成立（任意切点丢边界 n-1 gram）。
+
+### M9 — stream + DAG
+- `stream/producer.py`：确定性模拟行（doc_id 确定 → 重放被 dedup 折叠——流式幂等的身份解）
+  → kafka-console-producer 通道（零客户端依赖）+ `consume_peek` 验证；
+- `dags/corpus_pipeline.py`：四源扇入→主链的 Airflow DAG（retries=2 指数退避，与 run_stage
+  幂等语义咬合）。⚠️ 激活需 airflow 容器挂仓库+装依赖（compose 未配，遗留）。
+
+### M10 — dashboard
+- `dashboard/app.py`：Streamlit+DuckDB 四视图（漏斗/删除归因/质量分布/runs 审计），
+  只读旁路；真实数据冒烟通过（漏斗 231,314→216,738；归因 top3=boilerplate 8609/
+  lang 3771/too_short 1900；runs 18 条）。
+
+### 微调入口（M5-M10 新增，均已入 MANUAL 反查表）
+dedup 参数（dedup_policy）/ 质量权重与门禁（quality_policy）/ 配比与预算（mix_policy）/
+发布 license 政策（release/run.py RELEASE_POLICY）/ ppl 训练量（downstream/run.py 常量）。
+
+### 遗留问题（M5-M10 合并）
+1. dedup 真实跑耗时（纯 py 单机基线，补录后即为 E2 对照点；Spark/Ray 版是 W4/W5 正戏）；
+2. Airflow DAG 激活（容器挂载+依赖）；Spark Structured Streaming 消费作业（kafka 包）；
+3. benchmark 下载（ceval/CMMLU）接污染索引；4. judge 蒸馏（砍单序 2）；
+5. release 的 MinIO 发布（当前本地目录，mc cp 上桶为发布仪式）；6. changelog 重算净增 4 条之谜。
+
+---
+
 ## M4 — clean 框架 + WP-01 六件套（2026-10-30）
 
 **目标**：clean 阶段真数据跑通；配置进指纹；changelog 两段式；合同测试。

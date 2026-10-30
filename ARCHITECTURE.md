@@ -59,6 +59,14 @@ SELECT source, COUNT(*) FROM raw_docs GROUP BY source;   ← W1 验收（wiki=23
 | `common/stage.py` | 配置/上游目录/变更记录 | 指纹·快照·验货·两段式账本 | `configs_digest` `snapshot_configs` `latest_outputs` `StagedChangeLog` `run_pipeline` |
 | `clean/base.py`+`rules.py` | spine 行流 | 保留行流 + stats + 变更记录 | `apply_rules` `iter_clean`（六规则，阈值全在 clean_policy） |
 | `clean/run.py` | data/raw/{src}/ingest | data/clean/source={s}/part-*.parquet + changelog | `run`（四源聚合，验货上游） |
+| `dedup/engine.py`+`run.py` | data/clean | data/dedup/source={s} + signatures.parquet + report.json | `dedup_pass`（exact+MinHashLSH+并查集，跨源矩阵在 report） |
+| `quality/engine.py`+`run.py` | data/dedup | data/quality/source={s}（+五维分数列）+ gate_report.json | `score_row` `gate` `build_ngram_index` |
+| `mix/run.py` | data/quality | data/mix/candidates（+token_count/mix_batch_id） | `stratified_sample` `token_count_estimate` |
+| `release/run.py` | data/mix | data/release/v{semver}/（part + provenance_card.yaml） | `next_version` `build_provenance_card`（license 执法） |
+| `downstream/ppl.py`+`run.py` | 四层语料 | data/downstream/report.json（四臂 ppl + CI） | `CharNgramLM` `bootstrap_ci`（N7：纯 py 5-gram） |
+| `stream/producer.py` | — | Kafka topic corpus-ingest | `build_messages` `produce`（doc_id 确定→重放被 dedup 折叠） |
+| `dags/corpus_pipeline.py` | — | Airflow DAG 定义 | 四源扇入→clean→…→downstream（激活条件见 DEVLOG M9） |
+| `dashboard/app.py` | data/ 本地镜像 | Streamlit 四视图 | `funnel` `removal_attribution` `quality_distribution` `runs_audit` |
 | `clean/pii.py` | 文本 | 命中/脱敏 | `detect` `redact`（GB11643 + Luhn 校验） |
 | `sql/raw_docs.sql` | — | 外部表 DDL + 验收查询 | — |
 | `smoke/m1.py` | — | 五步 PASS/FAIL | — |
