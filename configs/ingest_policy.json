@@ -1,6 +1,7 @@
 {
   "version": "0.1.0",
   "status": "ingest 阶段策略。改任何阈值 = 改产物内容，下游需要 force 重算（M4 配置指纹落地前手动）。",
+  "language_default": "zh",
   "oscar": {
     "bad_row_guardrail": 0.05,
     "bad_row_guardrail_note": "单分片坏行率护栏：超过则整片 fail-fast（区分毒丸行与源结构漂移），阈值 W3 后按实测调",
@@ -13,5 +14,15 @@
     "seed": 42,
     "k": 2,
     "note": "确定性整群抽样：seed+k 进 git 即可复现；manifest 见 data/meta/samples/"
+  },
+  "pdf": {
+    "bad_file_guardrail": 0.34,
+    "bad_file_guardrail_note": "文件级聚合护栏（同 oscar 的 run 级语义）。源清单是人工维护的少量文件，阈值放宽",
+    "raw_archive_dir": "data/raw/pdf/files",
+    "raw_archive_note": "原始 PDF 字节按 sha256 归档于此（raw 层不可变），raw_uri 指向归档件"
+  },
+  "news": {
+    "policy_note": "人工策划语料按干净源处理：缺 id/空 content 直接 fail-fast（与 oscar 的 quarantine 策略差异，M2-D4 同族）",
+    "language_default": "zh"
   }
 }

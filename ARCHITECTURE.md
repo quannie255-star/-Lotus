@@ -53,6 +53,9 @@ SELECT source, COUNT(*) FROM raw_docs GROUP BY source;   ← W1 验收（wiki=23
 | `ingest/wiki.py` | HF 分片 parquet | spine parquet | `download` `iter_docs` `map_row` `run` |
 | `ingest/oscar.py` | mock jsonl（N1 后换真实源） | spine parquet + quarantine parquet | `write_mock_shards` `classify_row` `run`（护栏 0.05） |
 | `ingest/sampling.py` | 分片清单 | 确定性抽样 + manifest 快照 | `sample_shards` `write_sample_manifest` |
+| `ingest/pdf.py` | 源清单（URL/本地 PDF） | spine parquet + 归档件 + quarantine | `fetch_bytes` `archive_raw` `run` |
+| `ingest/news.py` | 本地 jsonl（N2 后换真实语料） | spine parquet | `iter_docs` `run`（fail-fast 策略） |
+| `parse/pdf_extractor.py` | PDF 文件 | ExtractResult(text/pages/warnings) | `extract_pdf`（PyMuPDF 文本层） |
 | `clean/pii.py` | 文本 | 命中/脱敏 | `detect` `redact`（GB11643 + Luhn 校验） |
 | `sql/raw_docs.sql` | — | 外部表 DDL + 验收查询 | — |
 | `smoke/m1.py` | — | 五步 PASS/FAIL | — |

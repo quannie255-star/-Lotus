@@ -33,6 +33,12 @@ SPINE_PARQUET_SCHEMA = pa.schema(
         pa.field("license", pa.string(), nullable=False),
         pa.field("license_status", pa.string(), nullable=False),
         pa.field("commercial_use", pa.string(), nullable=False),
-        pa.field("source_metadata", pa.struct([pa.field("page_title", pa.string())])),
+        # 源特化收敛容器：键 = 各源登记键的并集（wiki:page_title / news:publisher,section）。
+        # 新源要新键 = 改这里 + key registry 登记 + schema_version 递增（DEVLOG M3-D3）
+        pa.field("source_metadata", pa.struct([
+            pa.field("page_title", pa.string()),
+            pa.field("publisher", pa.string()),
+            pa.field("section", pa.string()),
+        ])),
     ]
 )

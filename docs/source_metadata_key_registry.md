@@ -22,8 +22,10 @@
 | wiki | `namespace` | string | — | **deprecated（v0.3.0）**：同上，镜像未导出命名空间；条目名空间已由 dump 预处理过滤 | 源系统 |
 | news | `publisher` | string | 否 | 发布媒体名；跨源复用 | 源系统 / meta |
 | news | `section` | string | 否 | 频道/栏目（要闻、财经…） | 源系统 |
-| pdf | `mineru_version` | string | 是 | MinerU 解析器版本；解析结果不可复现时必须能追版本 | 解析器 |
+| pdf | `extract_engine` | string | 是 | 提取引擎标识（v1= pymupdf 文本层；MinerU 升级后变更，解析结果必须能追版本） | 解析器 |
 | pdf | `page_count` | number | 否 | 原始页数；质量校准用 | 解析器 |
+| pdf | `pdf_sha256` | string | 是 | 原始文件字节哈希（= source_id，冗余存储便于 quarantine 表对账） | 派生 |
+| pdf | `mineru_version` | string | — | **deprecated（M3）**：v1 用 PyMuPDF 文本层，无 MinerU；升级后由 `extract_engine` 承载 | 解析器 |
 
 ## 待登记（占位，等实际接入时补）
 

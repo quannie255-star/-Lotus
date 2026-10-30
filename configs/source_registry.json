@@ -59,11 +59,13 @@
       "commercial_use": "unknown",
       "tos_url": null,
       "default_genre": "gov",
-      "content_format": "markdown",
-      "source_id_policy": "sha256(raw_bytes)（无稳定主键）",
+      "content_format": "plain_text",
+      "content_format_note": "v1 用 PyMuPDF 文本层抽取（plain_text）；MinerU 升级后切 markdown 并同步本字段（N3）",
+      "source_id_policy": "sha256(原始文件字节)（无稳定主键）",
       "metadata_schema": {
-        "mineru_version": "string",
-        "page_count":     "number"
+        "extract_engine": "string",
+        "page_count":     "number",
+        "pdf_sha256":     "string"
       }
     }
   }

@@ -5,6 +5,66 @@
 
 ---
 
+## M3 — news + pdf 源（2026-10-30）
+
+**日期**：2026-10-30。**里程碑**：M3。
+**目标**：四源集齐（oscar mock / wiki 真 / news mock-jsonl / pdf 真链路生成件），parse 层落地。
+
+### 实际做了什么
+
+- `parse/pdf_extractor.py`：`extract_pdf -> ExtractResult`（PyMuPDF 文本层轻路径；疑似扫描页
+  → warnings 不硬造内容；坏文件异常捕获进 warnings 走 quarantine）；
+- `ingest/pdf.py`：`load_entries / fetch_bytes(%PDF 魔数校验) / archive_raw(按 sha256
+  内容寻址归档原始字节=raw 层不可变) / build_row / run(文件级聚合护栏)`；显式 entries
+  落盘 pdf.entries.json 作指纹锚（防假缓存）；
+- `ingest/news.py`：本地 jsonl 契约完整适配器（干净源 fail-fast；publisher/section 进
+  source_metadata；published → source_timestamp）+ mock 生成器 + main 入口；
+- `ingest/spine_schema.py`：source_metadata struct 扩为 {page_title, publisher, section}；
+  key registry 登记 extract_engine/pdf_sha256、mineru_version 标 deprecated；
+- requirements 钉 pymupdf==1.28.2、requests==2.32.3。
+
+### 关键决策及理由
+
+- **M3-D1 PDF 分层提取**：文本层走 PyMuPDF 秒级；扫描件只警告不硬造（OCR=成本悬崖）；
+  registry content_format 同步 plain_text——声明必须与事实一致。
+- **M3-D2 原始字节内容寻址归档**：{sha256}.pdf 归档件即 raw 证据；同文件重复登记天然去重；
+  source_id=sha256(bytes)（无稳定主键源，registry 声明）。
+- **M3-D3 metadata 容器键并集**（struct 加可空键而非 map）：兼容既有 wiki 数据；
+  代价=每加键动 schema，由 key registry 元测试强制登记。
+- **M3-D4 news 干净源策略**：缺 id/空 content fail-fast，与 oscar quarantine 构成 M2-D4 两极。
+
+### 遇到的问题及解决
+
+1. `insert_text` 不折行 → CJK 长句出页宽被裁（每页 12 字）→ 误报扫描页；改
+   `insert_textbox` + 阈值 20→10（19 字短目录页不该误伤）；
+2. `raw_uri` 的 `relative_to(ROOT)` 在注入 tmp 归档目录时 ValueError → 仓库内相对/外绝对；
+3. **entries 指纹锚陷阱**（自查逮住）：固定文件当指纹 = 不同清单假缓存 → entries 落盘
+   为字节稳定文件再作输入 + 回归测试 `test_pdf_entries_fingerprint_isolation`；
+4. news 漏 main() → `python -m` 静默空跑；补齐并记入遗留（家族 CLI 存在性检查 → M4）；
+5. 元测试逮人 ×2：requirements 未钉版、key registry 漏登记——守卫测试让机器替人守纪律。
+
+### 怎么验证的（实跑）
+
+```
+$ python -m pytest -q
+88 passed in 5.18s                        （80 → 88）
+$ python -c "from ingest import news; print(news.run()['rows'])"
+30
+$ python -m ingest.news（二次）→ "cached": true          ← 幂等
+$ pdf 生成件实跑 → rows=1, 归档件落位, raw_uri 可解析
+```
+
+### 微调入口
+
+MANUAL 新增行：PDF 源清单 / 扫描页阈值 / PDF 护栏 / news 输入文件（见反查表 M3 段）。
+
+### 遗留问题
+
+1. pdf_sources.json 真实政府 URL 待网络窗口录入；2. N1/N2 仍开；
+3. 家族 CLI 存在性检查 → M4 合同测试；4. MinerU 扫描件路径（N3）。
+
+---
+
 ## M2 — OSCAR 适配器（mock 骨架，真实数据待 N1）（2026-10-30）
 
 **日期**：2026-10-30。**里程碑**：M2。
@@ -77,6 +137,8 @@ MANUAL 反查表新增：OSCAR 护栏阈值/语言默认（configs/ingest_policy
    三件事实测后重写 download() 与校准 classify_row；
 2. run() 的 mock_dir 注入用了全局变量临时交换——能用但丑，M4 stage 化时随契约重构；
 3. oscar 上传 MinIO（source=oscar 分区）待真实数据到位后进 smoke。
+
+## M1 — 骨架 + wiki 全链路（2026-10-26 ~ 10-30）
 
 **日期**：2026-10-26 起，10-30 收口（smoke PASS）。
 **里程碑**：M1（对应蓝图 §5 的 W1 段：环境、契约、wiki 源、验收）。

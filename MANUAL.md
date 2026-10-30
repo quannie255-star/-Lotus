@@ -21,6 +21,10 @@
 | OSCAR 坏行护栏/语言默认 | `configs/ingest_policy.json` 的 `oscar` 节 | 护栏 0.05；语言默认 zh | oscar 的 quarantine 率与 fail-fast 阈值 | `python -m ingest.oscar --force` |
 | 抽样种子/份数 | `configs/ingest_policy.json` 的 `sample` 节 | seed=42, k=2 | 大源首跑样本构成 | 重跑 ingest；manifest 落 data/meta/samples/ |
 | OSCAR mock 源 | `ingest/oscar.py` 的 `MOCK_DIR`/`write_mock_shards` | data/mock/oscar，4×50 行 | mock 数据形态 | N1 实测后整个 mock 节删除 |
+| PDF 源清单 | `configs/pdf_sources.json` 的 `files` | 空（测试用生成件） | pdf 源的文档集合 | `python -m ingest.pdf` 前先录 URL/路径 |
+| PDF 扫描页阈值 | `parse/pdf_extractor.py` 的 `SCANNED_PAGE_CHAR_THRESHOLD` | 10 | 扫描页误报率 | 改后 force 重跑 pdf ingest |
+| PDF 坏文件护栏 | `configs/ingest_policy.json` 的 `pdf.bad_file_guardrail` | 0.34 | pdf run fail-fast 阈值 | force 重跑 |
+| news 输入文件 | `ingest/news.py` 的 `DATA_FILE` | data/mock/news/news.jsonl（30 行 mock） | news 数据形态 | N2 换真实语料时改 download 部分 |
 | wiki 的 license/genre 等声明 | `configs/source_registry.json` 的 `sources.wiki` | CC BY-SA 4.0 / wiki | 新 ingest 的行；旧行不追溯 | force 重跑 ingest（golden record 测试会同步要求更新） |
 | 单条记录的 schema 字段 | `schema/unified_schema.json`（spine/stage_extensions）+ `ingest/wiki.py` 的 `PARQUET_SCHEMA` + golden 测试 `tests/test_ingest_wiki.py` | v0.3.2 | 全管道契约 | schema_version 递增 + 全链路重算 |
 | 容器栈（服务/端口/凭据） | `docker-compose.yml`；凭据 `.env`（不进 git） | 7 服务 | 基础设施层 | `docker compose up -d` 重建受影响服务 |

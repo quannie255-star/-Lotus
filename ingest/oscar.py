@@ -177,7 +177,7 @@ def classify_row(raw: dict, ledger: FirstSeenLedger, shard_name: str, line_no: i
         "license": reg["license"],
         "license_status": reg["license_status"],
         "commercial_use": reg["commercial_use"],
-        "source_metadata": {"page_title": None},
+        "source_metadata": {"page_title": None, "publisher": None, "section": None},
     }
 
 
