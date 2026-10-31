@@ -37,3 +37,7 @@ data/.clean.configs/
 data/.dedup.configs/
 data/*.staging.jsonl
 data/meta/
+data/.*.configs/
+data/*_run.json
+data/*_err.log
+data/chain_log.txt
