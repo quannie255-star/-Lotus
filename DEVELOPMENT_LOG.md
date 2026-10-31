@@ -16,7 +16,14 @@ E2 素材：单机纯 py 的耗时基线）。本条目按里程碑分小节，�
   精确 → LSH 候选+真实 Jaccard 复核+并查集成簇；canonical=源信任→内容长→doc_id）；
   `dedup/run.py`：阶段入口（签名表/报告/changelog 三产物）；`configs/dedup_policy.json`。
 - 教训：keep/kept 变量名手滑导致全量误删（首测逮住）；JSON 不认 Python 下划线数字。
-- 实跑：⚠️ 后台进行中（耗时即 E2 单机基线数据），完成号补录。
+- 实跑（2026-10-30 22:47 落地，含纯 py MinHash 全程约 75 分钟——E2 的单机基线）：
+  ```
+  input 216738 → kept 215611（删 1127 = 0.52%）
+  exact: 88 条（64 组）｜ near: 1039 条（wiki 894 / oscar 116 / news 29）
+  跨源矩阵：空（mock 语料本无跨源重复——真 OSCAR/news 接入后才有意义，N1/N2）
+  ```
+- 报告口径 bug（遗留）：`near_clusters` 恒 0——簇字典键是并查集根 doc_id，
+  `startswith("near:")` 判断错对象；删除数与 changelog 账目已对平（1127=1127 ✓）。
 
 ### M6 — quality（五维 + 门禁 + 污染）
 - `quality/engine.py`：五维纯函数（completeness=段尾标点率 / uniqueness=1−最近邻 /

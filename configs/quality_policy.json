@@ -6,7 +6,7 @@
     "non_pollution": 0.25, "length": 0.10
   },
   "dims": {
-    "completeness": {"min_ending_punct_ratio": 0.3, "note": "段落末尾有标点的比例——截断文特征是大量无标点结尾"},
+    "completeness": {"note": "句式行(≥15字符)的标点结尾率。标题/列表/引用行豁免——把结构当缺陷是 M6 真实数据的教训(曾误杀27.4%维基文档)。hold 隔离带在污染/判官维实装前数学上不可达(基线总分0.65>band_hi)，当前门禁的牙齿是维度下限0.30——E3 扫描时一并校准"},
     "uniqueness": {"note": "消费 dedup 签名最近邻 Jaccard：1-sim 映射（签名表由 dedup 产出，跨阶段复用）"},
     "consistency": {"max_fffd_per_kchar": 2.0, "note": "残留替换符密度（clean 已删重灾户，这里是分数不是门禁）"},
     "non_pollution": {"n": 13, "benchmark_files": ["data/benchmarks/ceval.jsonl"], "note": "评测集 n-gram 命中密度映射；benchmark 未就绪时该维=1.0 并标记 skipped"},

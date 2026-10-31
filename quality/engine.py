@@ -22,10 +22,17 @@ def policy() -> dict:
 
 
 def score_completeness(row: dict) -> float:
-    """段落收尾完整度：以标点结尾的段落占比（截断文特征=大量段落无标点结尾）。"""
-    paras = [p.strip() for p in _PARA_SPLIT.split(row["content"]) if p.strip()]
+    """句式行的收尾完整度：以标点结尾的**句式行**（≥15 字符）占比。
+
+    为什么只数句式行：真实语料混有节标题（「题解」「评价」）、列表项、引用行——
+    它们本来就不以标点结尾，把它们算进分母会把结构当缺陷（M6 真实数据教训：
+    27.4% 的维基文档被误杀，诊断见 DEVLOG）。截断文的特征是**长段无标点结尾**，
+    本口径恰好只测这个。
+    """
+    paras = [p.strip() for p in _PARA_SPLIT.split(row["content"])
+             if len(p.strip()) >= 15]
     if not paras:
-        return 0.0
+        return 1.0   # 没有句式行（如纯链接页）→ 该维不作为证据，交给其他维度
     ok = sum(1 for p in paras if p.endswith(_ENDING_PUNCT))
     return ok / len(paras)
 

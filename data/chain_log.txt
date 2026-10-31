@@ -1,1 +1,3 @@
 [22:39:27] 等待 dedup 产物（data/dedup/ + manifest 键）...
+[22:47:58] dedup 产物已落地（等待了 540s）
+[22:47:58] → python -m quality.run

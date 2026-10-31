@@ -1,0 +1,13 @@
+{
+  "cached": false,
+  "output_dir": "C:\\Users\\10393\\Desktop\\项目一\\data\\release",
+  "output_hashes": {
+    "v0.1/part-00000.parquet": "c50570cecf97249dd96e7728b4f62e30d92f5e0d5aa072831d81f6a84acf0049",
+    "v0.1/provenance_card.yaml": "7e34a387ba920a8b8cba8ac19952f33d117d5508c98297a02aa77fc8c2a0122a"
+  },
+  "run_id": "release-20261031T134034Z-e364beb5",
+  "version": "0.1",
+  "rows": 2402,
+  "excluded": 1,
+  "card": "C:\\Users\\10393\\Desktop\\项目一\\data\\.release.tmp-37a2ce88\\v0.1\\provenance_card.yaml"
+}

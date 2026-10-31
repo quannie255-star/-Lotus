@@ -64,12 +64,14 @@ def snapshot_configs(config_paths: list, stable_dir: Path) -> list:
     return snaps
 
 
-def latest_outputs(stage_dir: Path) -> list:
+def latest_outputs(stage_dir: Path, only: str | None = None) -> list:
     """读上游 manifest，验货后返回 part 文件清单。
 
-    参数: stage_dir — 上游 output 根（其下有 manifest.json 与 {stage}/ 产物目录）
+    参数: stage_dir — 上游 output 根（其下有 manifest.json 与 {stage}/ 产物目录）；
+          only — 只取 manifest 里该阶段的产物（共享 manifest 多阶段键时防「双读」——
+          M6 真实数据教训：quality 读了 clean+dedup 两层，432k 行算两遍）
     返回: 存在且通过验货的产物路径列表（只挑 part-*.parquet）
-    异常: UpstreamNotReadyError — manifest 缺失/损坏/产物被动过
+    异常: UpstreamNotReadyError — manifest 缺失/损坏/产物被动过/only 指定的阶段不存在
     幂等: 只读
     """
     from common.idempotent import load_manifest  # 局部导入避免环
@@ -84,9 +86,13 @@ def latest_outputs(stage_dir: Path) -> list:
         raise UpstreamNotReadyError(stage_dir, f"manifest 损坏: {exc}") from exc
     if not manifest:
         raise UpstreamNotReadyError(stage_dir, "manifest 为空")
+    if only and only not in manifest:
+        raise UpstreamNotReadyError(stage_dir, f"manifest 里没有阶段 {only!r} 的产物——先跑 {only}")
 
     outputs = []
     for stage, entry in manifest.items():
+        if only and stage != only:
+            continue
         final_dir = stage_dir / stage
         for name, expected in (entry.get("output_hashes") or {}).items():
             path = final_dir / name
@@ -133,11 +139,26 @@ class StagedChangeLog:
         self._count += 1
 
     def commit(self, run_id: str) -> int:
-        """把 part 逐条以 dedupe=True 追加进全局。返回真实新增条数（行数差口径，
-        避免逐条判定去重的 O(n²)）。commit 中途崩溃可整体重试——dedupe 键吸收重复。"""
+        """批量提交：一次读全局建 dedupe 键集合（O(n)），一次写全部新记录。
+
+        替代逐条 append_change(dedupe=True)——那是 O(n²)（每条全文件扫描），5 万条
+        记录会卡一小时以上（M6 真实数据爆雷，M4 backlog 里记的债）。commit 中途崩溃
+        可整体重试：dedupe 键吸收重复。
+        """
         if not self.part_path.exists():
             return 0
-        before = _count_lines(self.global_path)
+        existing = set()
+        if self.global_path.exists():
+            with self.global_path.open(encoding="utf-8") as f:
+                for line in f:
+                    text = line.strip()
+                    if not text:
+                        continue
+                    old = json.loads(text)
+                    existing.add((old.get("doc_id"), old.get("stage"), old.get("action"),
+                                  old.get("reason"), old.get("old_hash")))
+
+        new_lines = []
         with self.part_path.open(encoding="utf-8") as f:
             for line in f:
                 text = line.strip()
@@ -145,10 +166,19 @@ class StagedChangeLog:
                     continue
                 record = json.loads(text)
                 record.setdefault("run_id", run_id)
-                changelog_mod.append_change(record, path=self.global_path, dedupe=True)
-        added = _count_lines(self.global_path) - before
+                key = (record.get("doc_id"), record.get("stage"), record.get("action"),
+                       record.get("reason"), record.get("old_hash"))
+                if key in existing:
+                    continue
+                existing.add(key)
+                new_lines.append(json.dumps(record, ensure_ascii=False, sort_keys=True))
+
+        if new_lines:
+            self.global_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.global_path.open("a", encoding="utf-8") as f:
+                f.write("\n".join(new_lines) + "\n")
         self.part_path.unlink(missing_ok=True)
-        return added
+        return len(new_lines)
 
     def discard(self) -> None:
         self.part_path.unlink(missing_ok=True)

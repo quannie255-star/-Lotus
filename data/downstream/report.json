@@ -1,0 +1,39 @@
+{
+  "arms": {
+    "clean": {
+      "ci95": [
+        2879.53,
+        3324.29
+      ],
+      "ppl": 3136.89,
+      "trained_chars": 1500000
+    },
+    "dedup": {
+      "ci95": [
+        2879.93,
+        3246.95
+      ],
+      "ppl": 3117.05,
+      "trained_chars": 1500000
+    },
+    "raw": {
+      "ci95": [
+        3007.2,
+        3535.15
+      ],
+      "ppl": 3277.65,
+      "trained_chars": 1500000
+    },
+    "release": {
+      "ci95": [
+        3171.95,
+        3596.46
+      ],
+      "ppl": 3396.77,
+      "trained_chars": 1500000
+    }
+  },
+  "engine": "char-5gram-alpha0.01",
+  "eval_n": 600,
+  "train_chars_cap": 1500000
+}

@@ -1,0 +1,28 @@
+{
+  "cached": false,
+  "output_dir": "C:\\Users\\10393\\Desktop\\项目一\\data\\quality",
+  "output_hashes": {
+    "source=news/part-00000.parquet": "609125a623a862cd334fa00e741b97a2c6efa44178873adbc89e0f85605a527a",
+    "source=wiki/part-00000.parquet": "c992487254530497927590515a862719fbc2a64136247808f48677bed66ba470",
+    "gate_report.json": "1b95a41df3932a3e6a2764548335716dbe8a84c9c108f4753d60b90c9b219c03"
+  },
+  "run_id": "quality-20261031T133810Z-359ec0ca",
+  "changelog_added": 0,
+  "rows": 190851,
+  "report": {
+    "pass": 190851,
+    "hold": 0,
+    "remove": 24760,
+    "pollution_index_ready": false,
+    "total": 215611,
+    "thresholds": {
+      "min_total_score": 0.55,
+      "min_dim_score": 0.3,
+      "quarantine_band": [
+        0.45,
+        0.55
+      ],
+      "note": "总分<0.45 删除（low_quality）；0.45~0.55 隔离（quarantine_borderline）；≥0.55 放行；任一维<0.30 也删除"
+    }
+  }
+}

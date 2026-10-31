@@ -7,5 +7,44 @@
       "source=pdf/part-00000.parquet": "0a9cc0bf8544859eeeecdc128163a07eac7d7ecae85ab91e1afd6fd8ca2d6ad8",
       "source=wiki/part-00000.parquet": "8c098fff8a7d5e272d9e5ec4677a1d583e8b2c05dca3e32e565ae83f21c913b6"
     }
+  },
+  "dedup": {
+    "input_fingerprint": "f9b7ab2272f72e4fb1cd6e91336ec798995457c1c8106f3ae2700ef005630cf2",
+    "output_hashes": {
+      "report.json": "5e09c2998e89b8f8cafdfa675073e94f9a482fc45aa231d0f30e2aa2e073187c",
+      "signatures.parquet": "5faaf95c5e135120c2b4eac023a63a9882b8e00488a61322e5d222b6f7af3d09",
+      "source=news/part-00000.parquet": "f4ca3ff5e427d2caad217a37e45a6a998ae267d604a710326085cb4e6f5abdd9",
+      "source=oscar/part-00000.parquet": "64583ce3579effe8d023dd8f4b3b7ee7ee113a5d84832e17b446c5e1b02ed94f",
+      "source=pdf/part-00000.parquet": "0a9cc0bf8544859eeeecdc128163a07eac7d7ecae85ab91e1afd6fd8ca2d6ad8",
+      "source=wiki/part-00000.parquet": "84a7e173848a0b0008a5f0390e1ee813fdf3fe620f2535f63e2aefd892d3cf64"
+    }
+  },
+  "downstream": {
+    "input_fingerprint": "ff02e0400a63f92fdfdd18ed87027f05cf045b2fec48ea4a6b98a13d6986276b",
+    "output_hashes": {
+      "report.json": "396f5570d2b662bf4d219c60e402c4937baabf37c870d0c73f7007188fec62e6"
+    }
+  },
+  "mix": {
+    "input_fingerprint": "272b39ad26bae50a2d5ecb97341f66ad187cdcf1c85964ef25e1b8135f7d95f7",
+    "output_hashes": {
+      "candidates/part-00000.parquet": "3ee3916ad60a334b0a499ad6b59a9f7599a71b161520ea45b553da8121a23af2",
+      "mix_report.json": "99e7c9f645f42f2dd9e29ba34438666d56cb869bf28dfaff9a208d90de43150d"
+    }
+  },
+  "quality": {
+    "input_fingerprint": "0d71e36a1ab7148598e47eee0d621912249fcd26f5f321304de37d36e8615446",
+    "output_hashes": {
+      "gate_report.json": "1b95a41df3932a3e6a2764548335716dbe8a84c9c108f4753d60b90c9b219c03",
+      "source=news/part-00000.parquet": "609125a623a862cd334fa00e741b97a2c6efa44178873adbc89e0f85605a527a",
+      "source=wiki/part-00000.parquet": "c992487254530497927590515a862719fbc2a64136247808f48677bed66ba470"
+    }
+  },
+  "release": {
+    "input_fingerprint": "7b7b445c4ae9c45eaf8c56e67b4491c6cdb82f11108311651abe669fbd4c0771",
+    "output_hashes": {
+      "v0.1/part-00000.parquet": "c50570cecf97249dd96e7728b4f62e30d92f5e0d5aa072831d81f6a84acf0049",
+      "v0.1/provenance_card.yaml": "7e34a387ba920a8b8cba8ac19952f33d117d5508c98297a02aa77fc8c2a0122a"
+    }
   }
 }

@@ -45,6 +45,20 @@ def test_good_row_passes_all_dims():
     assert scores["quality_score"] > 0.7
 
 
+def test_completeness_ignores_header_lines():
+    """结构行豁免：标题/列表混排的正常文档不该被 completeness 误杀（M6 真实数据回归）。"""
+    from quality.engine import score_completeness
+    wiki_like = _row("《孙膑兵法》是中国古代著名的兵书之一，作者是战国时齐国人孙膑。\n"
+                     "题解\n"
+                     "《孙膑兵法》最早见于《汉书·艺文志》，东汉以后就已经失传，历史学家钱穆曾考证。\n"
+                     "评价\n"
+                     "该书进一步发展了军事思想，是一部内容丰富的著作。\n"
+                     "版本\n"
+                     "1972年山东临沂银雀山汉墓出土竹简本。\n"
+                     "孙膑\n兵书\nS")
+    assert score_completeness(wiki_like) >= 0.75   # 4 句式行中 3-4 个以标点结尾
+
+
 def test_length_band_by_genre():
     from quality.engine import score_length
     news_300 = _row("正" * 300, genre="news")

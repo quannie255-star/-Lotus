@@ -1,0 +1,43 @@
+{
+  "cached": false,
+  "output_dir": "C:\\Users\\10393\\Desktop\\项目一\\data\\downstream",
+  "output_hashes": {
+    "report.json": "396f5570d2b662bf4d219c60e402c4937baabf37c870d0c73f7007188fec62e6"
+  },
+  "run_id": "downstream-20261031T134115Z-149395b9",
+  "arms": {
+    "clean": {
+      "ppl": 3136.89,
+      "ci95": [
+        2879.53,
+        3324.29
+      ],
+      "trained_chars": 1500000
+    },
+    "dedup": {
+      "ppl": 3117.05,
+      "ci95": [
+        2879.93,
+        3246.95
+      ],
+      "trained_chars": 1500000
+    },
+    "raw": {
+      "ppl": 3277.65,
+      "ci95": [
+        3007.2,
+        3535.15
+      ],
+      "trained_chars": 1500000
+    },
+    "release": {
+      "ppl": 3396.77,
+      "ci95": [
+        3171.95,
+        3596.46
+      ],
+      "trained_chars": 1500000
+    }
+  },
+  "eval_n": 600
+}

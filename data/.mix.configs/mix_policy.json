@@ -1,0 +1,10 @@
+{
+  "version": "0.1.0",
+  "status": "mix 阶段策略：token 预算配比 + 质量分层确定性抽样。比例按质量分排序后洗牌取满预算。",
+  "token_budget": 2000000,
+  "seed": 42,
+  "tokenizer": {"name": "char-estimate-v1", "note": "v1 用确定性字符估计（cjk≈1 token/字，latin≈0.25/字符）。Qwen 分词器升级位：换 transformers AutoTokenizer 后改 name 并 force 重算"},
+  "ratios": {"wiki": 0.6, "news": 0.2, "oscar": 0.15, "pdf": 0.05},
+  "oversample": false,
+  "note": "层枯竭（该源没有足够 token）时预算按剩余层等比再分配，报告记录每层 kept/target/枯竭"
+}

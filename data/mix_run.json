@@ -1,0 +1,21 @@
+{
+  "cached": false,
+  "output_dir": "C:\\Users\\10393\\Desktop\\项目一\\data\\mix",
+  "run_id": "mix-20261031T134028Z-bf3e8414",
+  "rows": 2403,
+  "tokens": 1500140,
+  "report": {
+    "news": {
+      "target_tokens": 500000,
+      "tokens": 54,
+      "docs": 1,
+      "exhausted": false
+    },
+    "wiki": {
+      "target_tokens": 1500000,
+      "tokens": 1500086,
+      "docs": 2402,
+      "exhausted": false
+    }
+  }
+}

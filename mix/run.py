@@ -102,7 +102,7 @@ def run(force: bool = False, output_root: Path | None = None, runs_path=None,
     out_root = Path(output_root) if output_root else DATA_ROOT
     configs = [Path(p) for p in (config_paths or CONFIGS)]
     snaps = snapshot_configs(configs, out_root / f".{STAGE}.configs")
-    inputs = latest_outputs(Path(quality_root) if quality_root else DATA_ROOT)
+    inputs = latest_outputs(Path(quality_root) if quality_root else DATA_ROOT, only="quality")
     pol = json.loads(Path(configs[0]).read_text(encoding="utf-8"))
     summary = {}
 
