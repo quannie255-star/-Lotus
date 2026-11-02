@@ -37,11 +37,11 @@ STAGES = {
 with DAG(
     dag_id="corpus_pipeline",
     default_args=DEFAULT_ARGS,
-    description="datalens 语料生产管道：采集→清洗→去重→质量→配比→发布→下游验证",
+    description="Lotus 濯莲语料生产管道：采集→清洗→去重→质量→配比→发布→下游验证",
     schedule_interval=None,
     start_date=days_ago(1),
     catchup=False,
-    tags=["datalens"],
+    tags=["lotus"],
 ) as dag:
     tasks = {
         name: BashOperator(task_id=name, bash_command=cmd, cwd="/opt/airflow/dags")

@@ -1,4 +1,4 @@
-# datalens 架构说明（ARCHITECTURE）
+# Lotus（濯莲）架构说明（ARCHITECTURE）
 
 > 本文是 **as-built** 文档：只描述当前已存在的代码与行为。规划中的模块（M2+）只出现在
 > §6 路线图并指向 `docs/blueprint.md`。完整设计决策在 `docs/wp-01-stage-protocol.md`（契约）

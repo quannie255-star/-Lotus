@@ -18,8 +18,8 @@ DATA = ROOT / "data"
 CHANGELOG = DATA / "meta" / "changelog.jsonl"
 RUNS = DATA / "meta" / "runs.jsonl"
 
-st.set_page_config(page_title="datalens 数据看板", layout="wide")
-st.title("datalens 数据质量看板")
+st.set_page_config(page_title="Lotus 濯莲数据看板", layout="wide")
+st.title("濯莲 Lotus 数据质量看板")
 
 
 def _con() -> "duckdb.DuckDBPyConnection":
