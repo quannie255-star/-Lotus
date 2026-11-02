@@ -1,0 +1,19 @@
+{
+  "dirty_reject_rate": null,
+  "exact_dup_rate": 0.0,
+  "format_completeness": 1.0,
+  "info_density_proxy": 0.9988,
+  "internal_redundancy": 0.0012,
+  "label": "v1-release",
+  "language_consistency": 0.7567,
+  "mean_quality_score": null,
+  "n_docs": 2402,
+  "notes": [
+    "内容指标基于确定性蓄水池抽样(≤20k, seed=2026)；n_docs/total_chars 为全量",
+    "exact_dup_rate = 抽样内规范化哈希重复的行占比（精确口径；近似/语义重复见 dedup 报告）",
+    "info_density_proxy v0 = 1−文档内重复行字符占比（正式信息密度定义待 Tier 1）"
+  ],
+  "sampled_rows": 2402,
+  "semantic_diversity": null,
+  "total_chars": 1816844
+}

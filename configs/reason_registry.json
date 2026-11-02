@@ -9,7 +9,8 @@
     "quality",
     "mix",
     "release",
-    "downstream"
+    "downstream",
+    "metrics"
   ],
   "reasons": {
     "exact_dup": {

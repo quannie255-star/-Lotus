@@ -1,0 +1,42 @@
+{
+  "after": "v1-release",
+  "before": "v0-raw",
+  "metrics": {
+    "exact_dup_rate": {
+      "after": 0.0,
+      "before": 0.00025,
+      "delta": -0.00025,
+      "verdict": "改善"
+    },
+    "format_completeness": {
+      "after": 1.0,
+      "before": 0.7257,
+      "delta": 0.2743,
+      "verdict": "改善"
+    },
+    "info_density_proxy": {
+      "after": 0.9988,
+      "before": 0.9966,
+      "delta": 0.0022,
+      "verdict": "改善"
+    },
+    "internal_redundancy": {
+      "after": 0.0012,
+      "before": 0.0034,
+      "delta": -0.0022,
+      "verdict": "改善"
+    },
+    "language_consistency": {
+      "after": 0.7567,
+      "before": 0.6882,
+      "delta": 0.0685,
+      "verdict": "改善"
+    },
+    "n_docs": {
+      "after": 2402,
+      "before": 231314,
+      "delta": -228912,
+      "verdict": "规模"
+    }
+  }
+}

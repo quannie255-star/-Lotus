@@ -25,6 +25,14 @@
       "report.json": "396f5570d2b662bf4d219c60e402c4937baabf37c870d0c73f7007188fec62e6"
     }
   },
+  "metrics": {
+    "input_fingerprint": "205ceff53206c25442129f11348cb1c527b322c1012ca0c9cf1c15c1aca576cd",
+    "output_hashes": {
+      "card_v0_raw.json": "56948046659a78c0b32a4a6e7cda0abc6cf3ba42d7ae27a7a93a0e29b6f6df4e",
+      "card_v1_release.json": "9484d19172616fb72f31336e464a1c0659bbe41dfad57ee882e9cb5c0a5692a5",
+      "comparison.json": "820e15daf5d09bcec05f23f64778b17398bd2410059e2707f630b8fa623707dc"
+    }
+  },
   "mix": {
     "input_fingerprint": "272b39ad26bae50a2d5ecb97341f66ad187cdcf1c85964ef25e1b8135f7d95f7",
     "output_hashes": {

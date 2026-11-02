@@ -98,7 +98,26 @@ def runs_audit() -> list:
     return list(runs.values())
 
 
-tab1, tab2, tab3, tab4 = st.tabs(["处理漏斗", "删除归因", "质量分布", "runs 审计"])
+@st.cache_data(ttl=60)
+def governance_comparison():
+    """治理前后指标卡对比（metrics 阶段产物）——控制台的读数面板。"""
+    path = DATA / "metrics" / "comparison.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+tab0, tab1, tab2, tab3, tab4 = st.tabs(
+    ["治理对比", "处理漏斗", "删除归因", "质量分布", "runs 审计"])
+
+with tab0:
+    comp = governance_comparison()
+    if comp is None:
+        st.info("尚无指标卡——先跑 python -m metrics.run")
+    else:
+        st.subheader(f"{comp['before']} → {comp['after']}（治理前后全指标）")
+        st.dataframe([{"指标": k, **{c: v[c] for c in ("before", "after", "delta", "verdict")}}
+                      for k, v in comp["metrics"].items()], use_container_width=True)
 
 with tab1:
     f = funnel()

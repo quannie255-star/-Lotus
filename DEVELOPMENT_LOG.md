@@ -1,5 +1,57 @@
 # 开发日志（DEVELOPMENT_LOG）
 
+---
+
+## Tier 0 — 指标卡 + GitHub 上线（2026-10-31，Lotus 更名日）
+
+**目标**：新定位「可编程数据质量控制器」的第一块仪表——治理前后全指标对比卡；
+项目更名 datalens → Lotus（濯莲）并推上 GitHub。
+
+### 实际做了什么
+
+- `metrics/card.py`：`compute_card`（确定性蓄水池抽样 ≤20k 行；精确重复率=规范化哈希
+  seen 集合 O(n)；完整性/语言一致性/文档内冗余/信息密度代理；语义多样性 v0=None 空读数
+  不假装）+ `compare_cards`（方向语义标注：重复率降=改善，完整性升=改善）；
+  `metrics/run.py`：v0(raw) 与 v1(release) 各拍一张卡 + 对比卡（阶段幂等）；
+- 看板新增「治理对比」首Tab；README 按控制器定位重写 + 路线图 + 数字成绩单；
+- 全仓 datalens → Lotus 对齐（历史文档保留代号注记）；
+- **GitHub 历史清洗**：M4 提交时 data/clean/source=wiki/part-00000.parquet（573MB）漏进
+  历史（当时 .gitignore 未覆盖 data/clean/）→ GitHub 拒收（GH001）→ filter-branch 全历史
+  移除 + refs/original 清理 + gc --aggressive：.git 从 506MB → **398KB** → 推送成功。
+
+### 关键决策
+
+- **T0-D1 抽样口径显式化**：指标卡内容指标基于 ≤20k 确定性抽样（seed=2026），卡片里
+  记 sampled_rows，不冒充全量——23 万行逐条规范化是分钟级×N 的代价，读数不需要；
+- **T0-D2 空读数纪律**：语义多样性未接入就是 null+备注，绝不给假数（控制台的公信力
+  高于指标的完备度）；
+- **T0-D3 大文件历史清洗而非 LFS**：产物是可重算的，不配 LFS；规则「data/ 产物永不入库」
+  由 .gitignore 全 zone 覆盖兜底。
+
+### 实跑（真实数据）
+
+```
+$ python -m metrics.run   →  v0-raw → v1-release 全指标对比：
+  format_completeness  0.7257 → 1.0000  Δ+0.2743 [改善]
+  language_consistency 0.6882 → 0.7567  Δ+0.0685 [改善]
+  info_density_proxy   0.9966 → 0.9988  Δ+0.0022 [改善]
+  exact_dup_rate       0.00025 → 0.0    Δ−0.00025[改善]
+  internal_redundancy  0.0034 → 0.0012  Δ−0.0022 [改善]
+  n_docs               231314 → 2402（配比采样，规模列）
+$ python -m pytest -q → 129 passed
+$ git push → github.com/quannie255-star/-Lotus main 上线（20+ commit 完整开发史）
+```
+
+### 遗留
+
+1. dirty_reject_rate 在 release 卡为 None（changelog 口径只对 raw 端有意义）——对比卡
+   该行暂缺，Tier 1 时按 run 归属修正；
+2. 语义多样性/正式信息密度定义（Tier 1/2）；
+3. N1 OSCAR 实测、tiny 模型消融、配方引擎——路线图 ⬜ 项。
+
+---
+
+
 > 模板：日期 / 里程碑 / 目标 / 实际做了什么 / 关键决策及理由 / 遇到的问题及解决 /
 > 怎么验证的 / 微调入口 / 遗留问题。决策编号 M{里程碑}-D{n} 会被代码内联注释引用。
 
